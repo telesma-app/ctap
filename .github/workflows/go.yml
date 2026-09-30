@@ -34,6 +34,19 @@ jobs:
     - name: Test
       run: go test -v ./...
 
+    - name: Test on 32-bit x86 (linux/386)
+      if: matrix.os == 'ubuntu-latest'
+      env:
+        GOARCH: "386"
+      run: go test ./...
+
+    - name: Build for 32-bit ARM (linux/arm)
+      if: matrix.os == 'ubuntu-latest'
+      env:
+        GOARCH: arm
+        GOARM: "7"
+      run: go build ./...
+
     - name: Test certified FIPS 140 policy
       if: matrix.os == 'ubuntu-latest'
       env:

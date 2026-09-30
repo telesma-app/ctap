@@ -467,7 +467,9 @@ func keyInteger(k Key, label int, name string) (int64, error) {
 	case int64:
 		return value, nil
 	case uint:
-		if value > math.MaxInt64 {
+		// uint is 32 bits wide on 32-bit platforms; widen before comparing
+		// so the constant does not overflow.
+		if uint64(value) > math.MaxInt64 {
 			break
 		}
 		return int64(value), nil

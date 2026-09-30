@@ -8,12 +8,17 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/cloudflare/circl/sign/ed448"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ctapfips140 "github.com/telesma-app/ctap/fips140"
 )
+
+// largeRSAExponent exceeds math.MaxInt32. It is a variable, not a constant,
+// so the test still compiles where int is 32 bits wide.
+var largeRSAExponent = int64(math.MaxInt32) + 2
 
 func TestFIPS140SignatureGate(t *testing.T) {
 	if !cryptofips140.Enabled() {
@@ -39,11 +44,18 @@ func TestFIPS140SignatureGate(t *testing.T) {
 				publicKey: &rsa.PublicKey{N: new(big.Int).Neg(fips140TestRSAModulus(2048)), E: 65537},
 				algorithm: AlgorithmRS256,
 			},
-			{
+		}
+		// An exponent above math.MaxInt32 only fits where int is 64 bits wide.
+		if strconv.IntSize == 64 {
+			tests = append(tests, struct {
+				name      string
+				publicKey any
+				algorithm Algorithm
+			}{
 				name:      "large RSA exponent",
-				publicKey: &rsa.PublicKey{N: fips140TestRSAModulus(2048), E: math.MaxInt32 + 2},
+				publicKey: &rsa.PublicKey{N: fips140TestRSAModulus(2048), E: int(largeRSAExponent)},
 				algorithm: AlgorithmRS256,
-			},
+			})
 		}
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
