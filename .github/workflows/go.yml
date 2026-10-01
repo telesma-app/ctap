@@ -26,13 +26,26 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libusb-1.0-0-dev libudev-dev
+        sudo apt-get install -y libusb-1.0-0-dev libudev-dev libc6-i386
 
     - name: Build
       run: go build -v ./...
 
     - name: Test
       run: go test -v ./...
+
+    - name: Test on 32-bit x86 (linux/386)
+      if: matrix.os == 'ubuntu-latest'
+      env:
+        GOARCH: "386"
+      run: go test ./...
+
+    - name: Build for 32-bit ARM (linux/arm)
+      if: matrix.os == 'ubuntu-latest'
+      env:
+        GOARCH: arm
+        GOARM: "7"
+      run: go build ./...
 
     - name: Test certified FIPS 140 policy
       if: matrix.os == 'ubuntu-latest'
