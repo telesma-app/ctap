@@ -8,6 +8,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/cloudflare/circl/sign/ed448"
@@ -39,11 +40,6 @@ func TestFIPS140SignatureGate(t *testing.T) {
 				publicKey: &rsa.PublicKey{N: new(big.Int).Neg(fips140TestRSAModulus(2048)), E: 65537},
 				algorithm: AlgorithmRS256,
 			},
-			{
-				name:      "large RSA exponent",
-				publicKey: &rsa.PublicKey{N: fips140TestRSAModulus(2048), E: math.MaxInt32 + 2},
-				algorithm: AlgorithmRS256,
-			},
 		}
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
@@ -51,6 +47,15 @@ func TestFIPS140SignatureGate(t *testing.T) {
 				assertFIPS140NotAllowed(t, err)
 			})
 		}
+		t.Run("large RSA exponent", func(t *testing.T) {
+			if strconv.IntSize == 32 {
+				t.Skip("requires a 64-bit int")
+			}
+			exponent := int64(math.MaxInt32) + 2
+			publicKey := &rsa.PublicKey{N: fips140TestRSAModulus(2048), E: int(exponent)}
+			err := VerifySignature(publicKey, AlgorithmRS256, nil, nil)
+			assertFIPS140NotAllowed(t, err)
+		})
 	})
 
 	t.Run("blocked credential keys", func(t *testing.T) {
