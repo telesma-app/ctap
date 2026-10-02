@@ -3,7 +3,7 @@ module github.com/telesma-app/ctap/examples/previewsign
 go 1.27.0
 
 require (
-	github.com/fxamacker/cbor/v2 v2.9.3
+	github.com/fxamacker/cbor/v2 v2.9.4
 	github.com/telesma-app/ctap v0.49.2
 )
 

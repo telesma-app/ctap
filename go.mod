@@ -9,7 +9,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/cloudflare/circl v1.6.5
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
-	github.com/fxamacker/cbor/v2 v2.9.3
+	github.com/fxamacker/cbor/v2 v2.9.4
 	github.com/telesma-app/ble v0.1.0
 	github.com/telesma-app/hid v0.12.1
 	github.com/telesma-app/iso7816 v0.2.0
