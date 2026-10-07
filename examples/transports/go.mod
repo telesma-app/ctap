@@ -9,7 +9,7 @@ require (
 	github.com/cloudflare/circl v1.6.5 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/ebitengine/purego v0.10.2 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
 	github.com/telesma-app/hid v0.12.1 // indirect
 	github.com/telesma-app/iso7816 v0.2.0 // indirect
 	github.com/telesma-app/pcsc v0.9.0 // indirect
