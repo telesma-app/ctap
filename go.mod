@@ -6,7 +6,7 @@ tool golang.org/x/tools/cmd/stringer
 
 require (
 	filippo.io/nistec v0.0.4
-	github.com/Microsoft/go-winio v0.6.2
+	github.com/Microsoft/go-winio v0.6.3
 	github.com/cloudflare/circl v1.6.5
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/fxamacker/cbor/v2 v2.9.4
@@ -25,6 +25,6 @@ require (
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/tools v0.49.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/tools v0.50.0 // indirect
 )
