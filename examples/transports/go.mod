@@ -5,7 +5,7 @@ go 1.27.0
 require github.com/telesma-app/ctap v0.49.2
 
 require (
-	github.com/Microsoft/go-winio v0.6.2 // indirect
+	github.com/Microsoft/go-winio v0.6.3 // indirect
 	github.com/cloudflare/circl v1.6.5 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/ebitengine/purego v0.10.2 // indirect
@@ -16,7 +16,7 @@ require (
 	github.com/telesma-app/windows-proxy v0.5.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )
 
