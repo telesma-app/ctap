@@ -14,7 +14,7 @@ import (
 	proxyprotocol "github.com/telesma-app/windows-proxy/protocol"
 )
 
-// Devices returns HID authenticators reported by the proxy.
+// Devices returns HID authenticators and descriptor read outcomes from the proxy.
 func Devices(ctx context.Context) iter.Seq2[*ghid.DeviceInfo, error] {
 	return func(yield func(*ghid.DeviceInfo, error) bool) {
 		pipe, err := winio.DialPipeContext(ctx, proxyprotocol.NamedPipePath)
@@ -42,7 +42,7 @@ func Devices(ctx context.Context) iter.Seq2[*ghid.DeviceInfo, error] {
 			return
 		}
 
-		var devices []*ghid.DeviceInfo
+		var devices proxyprotocol.Enumeration
 		if err := cbor.Unmarshal(message.Data, &devices); err != nil {
 			yield(nil, err)
 			return
@@ -53,7 +53,7 @@ func Devices(ctx context.Context) iter.Seq2[*ghid.DeviceInfo, error] {
 				yield(nil, err)
 				return
 			}
-			if !yield(device, nil) {
+			if !yield(device.DeviceInfo, device.MetadataErr) {
 				return
 			}
 		}
