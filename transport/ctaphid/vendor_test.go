@@ -10,8 +10,7 @@ import (
 )
 
 func TestVendorRejectsNonVendorCommand(t *testing.T) {
-	transport := ctaphid.NewTransport(testhid.New(t), ctaphid.ChannelID{})
-	_, err := transport.Vendor(context.Background(), ctaphid.CTAPHID_PING, nil)
+	_, err := ctaphid.Vendor(context.Background(), testhid.New(t), ctaphid.ChannelID{}, ctaphid.CTAPHID_PING, nil)
 	if err, target := err, ctaphid.ErrInvalidRequestMessage; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
@@ -20,8 +19,7 @@ func TestVendorRejectsNonVendorCommand(t *testing.T) {
 func TestVendorReturnsCTAPHIDError(t *testing.T) {
 	cid := ctaphid.ChannelID{1, 2, 3, 4}
 	fake := testhid.New(t, testhid.CTAPHIDError(cid, ctaphid.ERR_INVALID_CMD))
-	transport := ctaphid.NewTransport(fake, cid)
-	_, err := transport.Vendor(context.Background(), ctaphid.CTAPHID_VENDOR_FIRST, nil)
+	_, err := ctaphid.Vendor(context.Background(), fake, cid, ctaphid.CTAPHID_VENDOR_FIRST, nil)
 	if err == nil {
 		t.Fatalf("expected an error")
 	}

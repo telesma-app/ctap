@@ -371,8 +371,8 @@ func TestGetAssertionContinuesAfterAssertionWithoutExtensionData(t *testing.T) {
 }
 
 func TestLockRejectsOutOfRangeSeconds(t *testing.T) {
-	fake := testhid.NewCBORDevice(t, testCID)
-	d := newTestDevice(t, fake, protocol.AuthenticatorGetInfoResponse{})
+	transport := &capabilityTransport{}
+	d := &Device{transport: transport}
 
 	err := d.Lock(testContext, 11)
 	if err == nil {
@@ -381,5 +381,7 @@ func TestLockRejectsOutOfRangeSeconds(t *testing.T) {
 	if got := errors.Is(err, SyntaxError); !got {
 		t.Errorf("got false, want true")
 	}
-	assertNoAuthenticatorIO(t, fake)
+	if transport.lockSeconds != 0 {
+		t.Fatal("invalid lock duration reached the transport")
+	}
 }

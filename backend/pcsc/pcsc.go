@@ -1,5 +1,4 @@
-// Package pcsc connects inserted PC/SC cards to the standard FIDO ISO 7816
-// transport.
+// Package pcsc opens PC/SC cards as FIDO transports.
 package pcsc
 
 import (
@@ -39,7 +38,7 @@ func Devices(ctx context.Context) iter.Seq2[*nativepcsc.ReaderInfo, error] {
 	}
 }
 
-// Open connects to the card in reader and selects the standard FIDO applet.
+// Open returns an owned FIDO transport over an exclusive card connection.
 func Open(ctx context.Context, reader string) (*iso7816.Transport, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -47,19 +46,19 @@ func Open(ctx context.Context, reader string) (*iso7816.Transport, error) {
 
 	card, err := nativepcsc.Open(
 		reader,
-		nativepcsc.WithShareMode(nativepcsc.ShareModeShared),
+		nativepcsc.WithShareMode(nativepcsc.ShareModeExclusive),
 		nativepcsc.WithDisconnectDisposition(nativepcsc.DispositionResetCard),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	transport, err := iso7816.New(ctx, card)
+	device, err := iso7816.Open(ctx, card)
 	if err != nil {
 		return nil, errors.Join(err, card.Close())
 	}
 
-	return transport, nil
+	return device, nil
 }
 
 // Enumerate opens inserted PC/SC cards as standard FIDO transports.

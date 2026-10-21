@@ -22,7 +22,7 @@ var testContext = context.Background()
 
 func newTestDevice(t testing.TB, fake *testhid.Device, info protocol.AuthenticatorGetInfoResponse) *Device {
 	t.Helper()
-	transport := ctaphid.NewTransport(fake, testCID)
+	transport := testhid.Transport{Device: fake, CID: testCID}
 	ctapClient, err := client.NewClient(options.WithTransport(transport))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

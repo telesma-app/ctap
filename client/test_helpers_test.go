@@ -24,7 +24,7 @@ var testCID = ctaphid.ChannelID{1, 2, 3, 4}
 
 func newTestClient(t testing.TB, device *testhid.Device) *Client {
 	t.Helper()
-	client, err := NewClient(options.WithTransport(ctaphid.NewTransport(device, testCID)))
+	client, err := NewClient(options.WithTransport(testhid.Transport{Device: device, CID: testCID}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

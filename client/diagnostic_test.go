@@ -652,7 +652,7 @@ func TestExchangeLogsStructuredRedactedDiagnostic(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	_, err = client.cbor(context.Background(), transport.request)
+	_, err = client.exchange(context.Background(), transport.request)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

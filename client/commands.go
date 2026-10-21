@@ -23,6 +23,7 @@ import (
 	ctaptransport "github.com/telesma-app/ctap/transport"
 )
 
+// Client sends CTAP commands through a bound transport. Create it with NewClient.
 type Client struct {
 	diagnosticSink diagnostic.Sink
 	encMode        cbor.EncMode
@@ -30,17 +31,10 @@ type Client struct {
 	transport      ctaptransport.CBOR
 }
 
-// ErrTransportNotConfigured is returned by commands on an unbound client.
+// ErrTransportNotConfigured means NewClient received no transport.
 var ErrTransportNotConfigured = errors.New("client: transport not configured")
 
-func (cl *Client) cbor(ctx context.Context, data []byte) (ctaptransport.CBORResponse, error) {
-	if cl.transport == nil {
-		return ctaptransport.CBORResponse{}, ErrTransportNotConfigured
-	}
-
-	return cl.exchange(ctx, data)
-}
-
+// NewClient borrows the configured transport without performing I/O.
 func NewClient(opts ...options.Option) (*Client, error) {
 	oo := options.NewOptions(opts...)
 	if oo.Transport == nil {
@@ -125,7 +119,7 @@ func (cl *Client) MakeCredential(
 		return protocol.AuthenticatorMakeCredentialResponse{}, fmt.Errorf("cannot marshal MakeCredential CBOR request: %w", err)
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorMakeCredential)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorMakeCredential)}, b))
 	if err != nil {
 		return protocol.AuthenticatorMakeCredentialResponse{}, err
 	}
@@ -205,7 +199,7 @@ func (cl *Client) GetAssertion(
 			return
 		}
 
-		respRawBegin, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorGetAssertion)}, bBegin))
+		respRawBegin, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorGetAssertion)}, bBegin))
 		if err != nil {
 			yield(protocol.AuthenticatorGetAssertionResponse{}, err)
 			return
@@ -232,7 +226,7 @@ func (cl *Client) GetAssertion(
 		}
 
 		for i := uint(1); i < respBegin.NumberOfCredentials; i++ {
-			respRaw, err := cl.cbor(ctx, []byte{byte(protocol.AuthenticatorGetNextAssertion)})
+			respRaw, err := cl.exchange(ctx, []byte{byte(protocol.AuthenticatorGetNextAssertion)})
 			if err != nil {
 				yield(protocol.AuthenticatorGetAssertionResponse{}, err)
 				return
@@ -258,7 +252,7 @@ func (cl *Client) GetAssertion(
 }
 
 func (cl *Client) GetInfo(ctx context.Context) (protocol.AuthenticatorGetInfoResponse, error) {
-	respRaw, err := cl.cbor(ctx, []byte{byte(protocol.AuthenticatorGetInfo)})
+	respRaw, err := cl.exchange(ctx, []byte{byte(protocol.AuthenticatorGetInfo)})
 	if err != nil {
 		return protocol.AuthenticatorGetInfoResponse{}, err
 	}
@@ -282,7 +276,7 @@ func (cl *Client) GetPINRetries(
 	}
 
 	req := &protocol.AuthenticatorClientPINRequest{
-		// While this parameter is unnecessary, SoloKeys Solo 2 requires it for some reason.
+		// Solo 2 requires pinUvAuthProtocol even for getPINRetries.
 		PinUvAuthProtocol: pinUvAuthProtocol,
 		SubCommand:        protocol.ClientPINSubCommandGetPINRetries,
 	}
@@ -292,7 +286,7 @@ func (cl *Client) GetPINRetries(
 		return 0, nil, err
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
 	if err != nil {
 		return 0, nil, err
 	}
@@ -331,7 +325,7 @@ func (cl *Client) GetUVRetries(
 		return 0, err
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
 	if err != nil {
 		return 0, err
 	}
@@ -366,7 +360,7 @@ func (cl *Client) GetKeyAgreement(
 		return nil, fmt.Errorf("cannot marshal keyAgreement CBOR request: %w", err)
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
 	if err != nil {
 		return nil, fmt.Errorf("keyAgreement CBOR request failed: %w", err)
 	}
@@ -450,7 +444,7 @@ func (cl *Client) SetPIN(
 		return err
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b)); err != nil {
 		return err
 	}
 
@@ -514,15 +508,14 @@ func (cl *Client) ChangePIN(
 		return err
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b)); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// GetPinToken allows getting a PinUvAuthToken (superseded by GetPinUvAuthTokenUsingUvWithPermissions or
-// GetPinUvAuthTokenUsingPinWithPermissions, thus for backwards compatibility only).
+// GetPinToken obtains a legacy PIN/UV token without scoped permissions.
 func (cl *Client) GetPinToken(
 	ctx context.Context,
 	pinUvAuthProtocol protocol.PinUvAuthProtocol,
@@ -562,7 +555,7 @@ func (cl *Client) GetPinToken(
 		return nil, err
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
 	if err != nil {
 		return nil, err
 	}
@@ -580,7 +573,7 @@ func (cl *Client) GetPinToken(
 	return pinUvAuthToken, nil
 }
 
-// GetPinUvAuthTokenUsingPinWithPermissions allows getting a PinUvAuthToken with specific permissions using PIN.
+// GetPinUvAuthTokenUsingPinWithPermissions gets a PIN token with scoped permissions.
 func (cl *Client) GetPinUvAuthTokenUsingPinWithPermissions(
 	ctx context.Context,
 	pinUvAuthProtocol protocol.PinUvAuthProtocol,
@@ -624,7 +617,7 @@ func (cl *Client) GetPinUvAuthTokenUsingPinWithPermissions(
 		return nil, err
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
 	if err != nil {
 		return nil, err
 	}
@@ -642,8 +635,7 @@ func (cl *Client) GetPinUvAuthTokenUsingPinWithPermissions(
 	return pinUvAuthToken, nil
 }
 
-// GetPinUvAuthTokenUsingUv obtains the legacy FIDO_2_1_PRE UV token. That
-// command uses pinUvAuthProtocol 1 and does not carry permissions or an RP ID.
+// GetPinUvAuthTokenUsingUv gets a legacy FIDO_2_1_PRE UV token using protocol 1.
 func (cl *Client) GetPinUvAuthTokenUsingUv(
 	ctx context.Context,
 	keyAgreement cose.Key,
@@ -657,7 +649,7 @@ func (cl *Client) GetPinUvAuthTokenUsingUv(
 	)
 }
 
-// GetPinUvAuthTokenUsingUvWithPermissions allows getting a PinUvAuthToken with specific permissions using User Verification.
+// GetPinUvAuthTokenUsingUvWithPermissions gets a UV token with scoped permissions.
 func (cl *Client) GetPinUvAuthTokenUsingUvWithPermissions(
 	ctx context.Context,
 	pinUvAuthProtocol protocol.PinUvAuthProtocol,
@@ -699,7 +691,7 @@ func (cl *Client) getPinUvAuthTokenUsingUv(
 		return nil, err
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorClientPIN)}, b))
 	if err != nil {
 		return nil, err
 	}
@@ -717,9 +709,9 @@ func (cl *Client) getPinUvAuthTokenUsingUv(
 	return pinUvAuthToken, nil
 }
 
-// Reset sends an authenticatorReset command through the configured transport.
+// Reset sends authenticatorReset.
 func (cl *Client) Reset(ctx context.Context) error {
-	_, err := cl.cbor(ctx, []byte{byte(protocol.AuthenticatorReset)})
+	_, err := cl.exchange(ctx, []byte{byte(protocol.AuthenticatorReset)})
 	return err
 }
 
@@ -739,7 +731,7 @@ func (cl *Client) GetBioModality(
 		command = protocol.PrototypeAuthenticatorBioEnrollment
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b))
 	if err != nil {
 		return protocol.AuthenticatorBioEnrollmentResponse{}, err
 	}
@@ -771,7 +763,7 @@ func (cl *Client) GetFingerprintSensorInfo(
 		command = protocol.PrototypeAuthenticatorBioEnrollment
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b))
 	if err != nil {
 		return protocol.AuthenticatorBioEnrollmentResponse{}, err
 	}
@@ -834,7 +826,7 @@ func (cl *Client) EnrollBegin(
 		command = protocol.PrototypeAuthenticatorBioEnrollment
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b))
 	if err != nil {
 		return protocol.AuthenticatorBioEnrollmentResponse{}, err
 	}
@@ -897,7 +889,7 @@ func (cl *Client) EnrollCaptureNextSample(
 		command = protocol.PrototypeAuthenticatorBioEnrollment
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b))
 	if err != nil {
 		return protocol.AuthenticatorBioEnrollmentResponse{}, err
 	}
@@ -929,7 +921,7 @@ func (cl *Client) CancelCurrentEnrollment(
 		command = protocol.PrototypeAuthenticatorBioEnrollment
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b)); err != nil {
 		return err
 	}
 
@@ -969,7 +961,7 @@ func (cl *Client) EnumerateEnrollments(
 		command = protocol.PrototypeAuthenticatorBioEnrollment
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b))
 	if err != nil {
 		return protocol.AuthenticatorBioEnrollmentResponse{}, err
 	}
@@ -1032,7 +1024,7 @@ func (cl *Client) SetFriendlyName(
 		command = protocol.PrototypeAuthenticatorBioEnrollment
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b)); err != nil {
 		return err
 	}
 
@@ -1086,7 +1078,7 @@ func (cl *Client) RemoveEnrollment(
 		command = protocol.PrototypeAuthenticatorBioEnrollment
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b)); err != nil {
 		return err
 	}
 
@@ -1125,7 +1117,7 @@ func (cl *Client) GetCredsMetadata(
 		command = protocol.PrototypeAuthenticatorCredentialManagement
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b))
 	if err != nil {
 		return protocol.AuthenticatorCredentialManagementResponse{}, err
 	}
@@ -1138,11 +1130,8 @@ func (cl *Client) GetCredsMetadata(
 	return resp, nil
 }
 
-// EnumerateRPs yields all Relying Parties from one authenticator enumeration.
-//
-// IMPORTANT: Fully consume this iterator before invoking any other Client
-// method. Sending another command invalidates the authenticator's active
-// enumeration state. Collect all RPs before starting EnumerateCredentials.
+// EnumerateRPs yields the authenticator's relying parties.
+// Consume it before any other Client call, including EnumerateCredentials.
 func (cl *Client) EnumerateRPs(
 	ctx context.Context,
 	preview bool,
@@ -1178,7 +1167,7 @@ func (cl *Client) EnumerateRPs(
 			command = protocol.PrototypeAuthenticatorCredentialManagement
 		}
 
-		respRawBegin, err := cl.cbor(
+		respRawBegin, err := cl.exchange(
 			ctx,
 			slices.Concat(
 				[]byte{byte(command)},
@@ -1216,7 +1205,7 @@ func (cl *Client) EnumerateRPs(
 				return
 			}
 
-			respRawNext, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, bNext))
+			respRawNext, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, bNext))
 			if err != nil {
 				yield(protocol.AuthenticatorCredentialManagementResponse{}, err)
 				return
@@ -1235,11 +1224,8 @@ func (cl *Client) EnumerateRPs(
 	}
 }
 
-// EnumerateCredentials yields all credentials for one Relying Party.
-//
-// IMPORTANT: Fully consume this iterator before invoking any other Client
-// method. Sending another command invalidates the authenticator's active
-// enumeration state. Do not nest it inside EnumerateRPs.
+// EnumerateCredentials yields credentials for one relying party.
+// Consume it before another Client call; do not nest it inside EnumerateRPs.
 func (cl *Client) EnumerateCredentials(
 	ctx context.Context,
 	preview bool,
@@ -1286,7 +1272,7 @@ func (cl *Client) EnumerateCredentials(
 			command = protocol.PrototypeAuthenticatorCredentialManagement
 		}
 
-		respRawBegin, err := cl.cbor(
+		respRawBegin, err := cl.exchange(
 			ctx,
 			slices.Concat(
 				[]byte{byte(command)},
@@ -1324,7 +1310,7 @@ func (cl *Client) EnumerateCredentials(
 				return
 			}
 
-			respRawNext, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, bNext))
+			respRawNext, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, bNext))
 			if err != nil {
 				yield(protocol.AuthenticatorCredentialManagementResponse{}, err)
 				return
@@ -1387,7 +1373,7 @@ func (cl *Client) DeleteCredential(
 		command = protocol.PrototypeAuthenticatorCredentialManagement
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b)); err != nil {
 		return err
 	}
 
@@ -1443,7 +1429,7 @@ func (cl *Client) UpdateUserInformation(
 		command = protocol.PrototypeAuthenticatorCredentialManagement
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(command)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(command)}, b)); err != nil {
 		return err
 	}
 
@@ -1452,7 +1438,7 @@ func (cl *Client) UpdateUserInformation(
 
 // Selection blocks until the user confirms presence or ctx is canceled.
 func (cl *Client) Selection(ctx context.Context) error {
-	_, err := cl.cbor(ctx, []byte{byte(protocol.AuthenticatorSelection)})
+	_, err := cl.exchange(ctx, []byte{byte(protocol.AuthenticatorSelection)})
 	return normalizeSelectionError(err)
 }
 
@@ -1522,7 +1508,7 @@ func (cl *Client) LargeBlobs(
 		return protocol.AuthenticatorLargeBlobsResponse{}, err
 	}
 
-	respRaw, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorLargeBlobs)}, b))
+	respRaw, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorLargeBlobs)}, b))
 	if err != nil {
 		return protocol.AuthenticatorLargeBlobsResponse{}, err
 	}
@@ -1571,7 +1557,7 @@ func (cl *Client) EnableEnterpriseAttestation(
 		return err
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorConfig)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorConfig)}, b)); err != nil {
 		return err
 	}
 
@@ -1612,15 +1598,14 @@ func (cl *Client) ToggleAlwaysUV(
 		return err
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorConfig)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorConfig)}, b)); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// SetMinPINLength invokes the setMinPINLength authenticatorConfig subcommand
-// with independently optional CTAP 2.3 PIN policy parameters.
+// SetMinPINLength updates the supplied CTAP 2.3 PIN policy parameters.
 func (cl *Client) SetMinPINLength(
 	ctx context.Context,
 	pinUvAuthProtocol protocol.PinUvAuthProtocol,
@@ -1664,7 +1649,7 @@ func (cl *Client) SetMinPINLength(
 		return err
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorConfig)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorConfig)}, b)); err != nil {
 		return err
 	}
 
@@ -1706,7 +1691,7 @@ func (cl *Client) EnableLongTouchForReset(
 		return err
 	}
 
-	if _, err := cl.cbor(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorConfig)}, b)); err != nil {
+	if _, err := cl.exchange(ctx, slices.Concat([]byte{byte(protocol.AuthenticatorConfig)}, b)); err != nil {
 		return err
 	}
 

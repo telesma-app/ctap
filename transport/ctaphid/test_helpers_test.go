@@ -95,3 +95,7 @@ func receive[T any](t testing.TB, ch <-chan T, message string) T {
 		return zero
 	}
 }
+
+func newTestTransport(device Device, cid ChannelID) *Transport {
+	return &Transport{device: newChannelDevice(device, cid), init: InitResponse{CID: cid}}
+}

@@ -26,7 +26,7 @@ func TestOpenAllocatesChannelAndTransfersDevice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got, want := transport.cid, transportTestCID; got != want {
+	if got, want := transport.init.CID, transportTestCID; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
 
@@ -103,7 +103,7 @@ func TestOpenInitWriteFailureReturnsTypedIOError(t *testing.T) {
 
 func TestTransportCBORPreCanceledWritesNothing(t *testing.T) {
 	dev := newOrderedDevice(t)
-	transport := NewTransport(dev, transportTestCID)
+	transport := newTestTransport(dev, transportTestCID)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -150,7 +150,7 @@ func TestTransportCommandsCloseDeviceAfterWriteFailure(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			dev := &failedOpenDevice{writeErr: io.ErrClosedPipe}
-			transport := NewTransport(dev, transportTestCID)
+			transport := newTestTransport(dev, transportTestCID)
 
 			err := test.call(transport)
 
@@ -217,7 +217,7 @@ func TestTransportCBORKeepsDeviceOpenAfterResponseError(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			dev := newResponseDevice(rawResponseReport(transportTestCID, test.command, test.data))
-			transport := NewTransport(dev, transportTestCID)
+			transport := newTestTransport(dev, transportTestCID)
 
 			_, err := transport.CBOR(t.Context(), []byte{byte(protocol.AuthenticatorGetInfo)})
 
@@ -251,7 +251,7 @@ func TestTransportCBORContinuesOnSameChannelAfterUnexpectedCommand(t *testing.T)
 		rawResponseReport(transportTestCID, CTAPHID_PING, nil),
 		rawResponseReport(transportTestCID, CTAPHID_CBOR, []byte{byte(ctaptransport.CTAP2_OK)}),
 	)
-	transport := NewTransport(dev, transportTestCID)
+	transport := newTestTransport(dev, transportTestCID)
 	t.Cleanup(func() {
 		if err := transport.Close(); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -283,7 +283,7 @@ func TestOpenDrainsReportsForOtherChannelsBeforeAllocation(t *testing.T) {
 	foreignReport := make([]byte, hidPacketSize)
 	foreignCID := ChannelID{5, 6, 7, 8}
 	copy(foreignReport, foreignCID[:])
-	foreignReport[4] = 0 // Invalid without filtering because it is a continuation packet.
+	foreignReport[4] = 0 // Continuation packet without an initial packet.
 	dev.reads <- foreignReport
 
 	transport, err := Open(t.Context(), dev)
@@ -295,7 +295,7 @@ func TestOpenDrainsReportsForOtherChannelsBeforeAllocation(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
-	if got, want := transport.cid, dev.cid; got != want {
+	if got, want := transport.init.CID, dev.cid; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
 
@@ -348,50 +348,9 @@ func TestRetryChannelBusyStopsWhenContextExpires(t *testing.T) {
 	}
 }
 
-func TestTransportPreCanceledContextTakesPriorityOverValidation(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	tests := []struct {
-		name string
-		call func(*Transport) error
-	}{
-		{
-			name: "CBOR",
-			call: func(transport *Transport) error {
-				_, err := transport.CBOR(ctx, nil)
-				return err
-			},
-		},
-		{
-			name: "Lock",
-			call: func(transport *Transport) error {
-				return transport.Lock(ctx, 11)
-			},
-		},
-		{
-			name: "Vendor",
-			call: func(transport *Transport) error {
-				_, err := transport.Vendor(ctx, 0, nil)
-				return err
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			transport := NewTransport(&failedOpenDevice{}, transportTestCID)
-
-			if err, target := test.call(transport), context.Canceled; !errors.Is(err, target) {
-				t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
-			}
-		})
-	}
-}
-
 func TestTransportCBORWritesSelectionBeforeCancel(t *testing.T) {
 	dev := newOrderedDevice(t)
-	transport := NewTransport(dev, transportTestCID)
+	transport := newTestTransport(dev, transportTestCID)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	resultc := make(chan error, 1)
@@ -438,7 +397,7 @@ func TestTransportCBORWritesSelectionBeforeCancel(t *testing.T) {
 
 func TestTransportCBORReportsInvalidationWhenCanceledResponseCannotBeDrained(t *testing.T) {
 	dev := newCancelDrainErrorDevice()
-	transport := NewTransport(dev, transportTestCID)
+	transport := newTestTransport(dev, transportTestCID)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	resultc := make(chan error, 1)
@@ -474,9 +433,52 @@ func TestTransportCBORReportsInvalidationWhenCanceledResponseCannotBeDrained(t *
 	}
 }
 
+func TestTransportCBORCancellationRequiresTerminalResponse(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		response    []byte
+		invalidated bool
+	}{
+		{name: "completed command", response: []byte{byte(ctaptransport.CTAP2_OK)}},
+		{name: "terminal CTAP error", response: []byte{byte(ctaptransport.CTAP2_ERR_INVALID_CBOR)}},
+		{name: "missing status", invalidated: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dev := newOrderedDevice(t)
+			dev.response = bytes.NewReader(rawResponseMessage(t, transportTestCID, CTAPHID_CBOR, test.response))
+			close(dev.releaseRequest)
+			transport := newTestTransport(dev, transportTestCID)
+			t.Cleanup(func() { _ = transport.Close() })
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			resultc := make(chan error, 1)
+			go func() {
+				_, err := transport.CBOR(ctx, []byte{byte(protocol.AuthenticatorSelection)})
+				resultc <- err
+			}()
+
+			receive(t, dev.writes, "Selection request was not written")
+			cancel()
+			receive(t, dev.writes, "CANCEL was not written")
+			err := receive(t, resultc, "cancellation did not complete")
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("CBOR = %v, want context cancellation", err)
+			}
+			if _, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err); invalidated != test.invalidated {
+				t.Fatalf("invalidation = %v, want %v: %v", invalidated, test.invalidated, err)
+			}
+			if test.invalidated {
+				receive(t, transport.device.stopped, "invalidated channel reader is still running")
+			} else if _, err := transport.CBOR(t.Context(), []byte{byte(protocol.AuthenticatorGetInfo)}); err != nil {
+				t.Fatalf("next CBOR = %v", err)
+			}
+		})
+	}
+}
+
 func TestTransportCBORPreservesReadError(t *testing.T) {
 	dev := &readErrorDevice{err: io.ErrUnexpectedEOF}
-	transport := NewTransport(dev, transportTestCID)
+	transport := newTestTransport(dev, transportTestCID)
 
 	_, err := transport.CBOR(t.Context(), []byte{byte(protocol.AuthenticatorSelection)})
 
@@ -502,7 +504,7 @@ func TestTransportCBORDoesNotCancelForContextErrorFromActiveContext(t *testing.T
 	for _, readErr := range []error{context.Canceled, context.DeadlineExceeded} {
 		t.Run(readErr.Error(), func(t *testing.T) {
 			dev := &readErrorDevice{err: readErr}
-			transport := NewTransport(dev, transportTestCID)
+			transport := newTestTransport(dev, transportTestCID)
 
 			_, err := transport.CBOR(t.Context(), []byte{byte(protocol.AuthenticatorSelection)})
 
@@ -525,7 +527,7 @@ func TestTransportCBORDoesNotCancelForContextErrorFromActiveContext(t *testing.T
 
 func TestTransportCloseCancelsAndInterruptsBlockedCBOR(t *testing.T) {
 	dev := newBlockingDevice()
-	transport := NewTransport(dev, transportTestCID)
+	transport := newTestTransport(dev, transportTestCID)
 	resultc := make(chan error, 1)
 	go func() {
 		_, err := transport.CBOR(context.Background(), []byte{byte(protocol.AuthenticatorSelection)})
@@ -559,7 +561,7 @@ func TestTransportCloseCancelsAndInterruptsBlockedCBOR(t *testing.T) {
 
 func TestTransportCloseReturnsTypedIOError(t *testing.T) {
 	dev := &failedOpenDevice{closeErr: io.ErrClosedPipe}
-	transport := NewTransport(dev, transportTestCID)
+	transport := newTestTransport(dev, transportTestCID)
 
 	err := transport.Close()
 
@@ -580,6 +582,68 @@ func TestTransportCloseReturnsTypedIOError(t *testing.T) {
 	if got := dev.closed; !got {
 		t.Errorf("got false, want true")
 	}
+}
+
+func TestTransportCloseInterruptsBlockedWrite(t *testing.T) {
+	dev := &blockedWriteDevice{started: make(chan struct{}), closed: make(chan struct{})}
+	transport := newTestTransport(dev, transportTestCID)
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(func() {
+		cancel()
+		_ = transport.device.Close()
+	})
+	resultc := make(chan error, 1)
+	go func() {
+		_, err := transport.CBOR(ctx, []byte{byte(protocol.AuthenticatorGetInfo)})
+		resultc <- err
+	}()
+	receive(t, dev.started, "CBOR write did not start")
+
+	closec := make(chan error, 1)
+	go func() { closec <- transport.Close() }()
+	if err := receive(t, closec, "Close waited for the blocked write"); err != nil {
+		t.Fatal(err)
+	}
+	err := receive(t, resultc, "Close did not interrupt the blocked write")
+	if !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("CBOR = %v, want closed connection", err)
+	}
+	ioErr, ok := errors.AsType[*ctaptransport.IOError](err)
+	if !ok || ioErr.Operation != ctaptransport.IOWrite {
+		t.Fatalf("CBOR = %v, want typed write error", err)
+	}
+	if _, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err); !invalidated {
+		t.Fatalf("CBOR = %v, want invalidation", err)
+	}
+}
+
+type blockedWriteDevice struct {
+	started chan struct{}
+	closed  chan struct{}
+}
+
+func (d *blockedWriteDevice) Read(ctx context.Context, _ []byte) (int, error) {
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case <-d.closed:
+		return 0, io.ErrClosedPipe
+	}
+}
+
+func (d *blockedWriteDevice) Write(ctx context.Context, _ []byte) (int, error) {
+	close(d.started)
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case <-d.closed:
+		return 0, io.ErrClosedPipe
+	}
+}
+
+func (d *blockedWriteDevice) Close() error {
+	close(d.closed)
+	return nil
 }
 
 type orderedDevice struct {

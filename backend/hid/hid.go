@@ -11,7 +11,7 @@ import (
 	ghid "github.com/telesma-app/hid"
 )
 
-// Devices returns the platform's FIDO HID endpoints.
+// Devices returns FIDO HID endpoints, including incomplete descriptor metadata.
 func Devices(ctx context.Context) iter.Seq2[*ghid.DeviceInfo, error] {
 	return func(yield func(*ghid.DeviceInfo, error) bool) {
 		if err := ctx.Err(); err != nil {
@@ -34,25 +34,40 @@ func Devices(ctx context.Context) iter.Seq2[*ghid.DeviceInfo, error] {
 	}
 }
 
-// Enumerate opens the platform's FIDO HID endpoints as CTAP transports.
+// Enumerate opens FIDO HID endpoints even when their metadata is incomplete.
 func Enumerate(ctx context.Context) iter.Seq2[ctaptransport.Device, error] {
+	return enumerate(ctx, Devices(ctx), Open)
+}
+
+func enumerate(
+	ctx context.Context,
+	devices iter.Seq2[*ghid.DeviceInfo, error],
+	open func(context.Context, string) (*ctaphid.Transport, error),
+) iter.Seq2[ctaptransport.Device, error] {
 	return func(yield func(ctaptransport.Device, error) bool) {
-		for info, err := range Devices(ctx) {
-			if err != nil {
-				yield(nil, err)
-				return
+		for info, err := range devices {
+			if info == nil {
+				if !yield(nil, err) {
+					return
+				}
+				continue
 			}
 
-			transport, err := Open(ctx, info.Path)
-			if !yield(transport, err) {
+			transport, err := open(ctx, info.Path)
+			if err != nil {
+				if !yield(nil, err) {
+					return
+				}
+				continue
+			}
+			if !yield(transport, nil) {
 				return
 			}
 		}
 	}
 }
 
-// Open opens a FIDO HID endpoint and allocates a CTAPHID channel. The returned
-// transport owns the endpoint.
+// Open opens a FIDO HID endpoint and returns an owned CTAPHID transport.
 func Open(ctx context.Context, path string) (*ctaphid.Transport, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

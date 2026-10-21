@@ -249,3 +249,13 @@ func parseRequest(written []byte) (Request, int, error) {
 }
 
 var _ ctaphid.Device = (*Device)(nil)
+
+// Transport exchanges commands on the scripted device's fixed channel.
+type Transport struct {
+	*Device
+	CID ctaphid.ChannelID
+}
+
+func (t Transport) CBOR(ctx context.Context, data []byte) (ctaptransport.CBORResponse, error) {
+	return ctaphid.CBOR(ctx, t.Device, t.CID, data)
+}

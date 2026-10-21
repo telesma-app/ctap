@@ -54,7 +54,7 @@ above may still be unavailable on a specific device.
 | USB HID               | Uses the cgo-free [`telesma-app/hid`](https://github.com/telesma-app/hid) backend                                                                    |
 | TCP CTAPHID stream    | Connects emulators and proxies that expose a stream of complete 64-byte CTAPHID reports; this is not a FIDO transport                                |
 | Windows named pipe    | Connects to a running [`telesma-app/windows-proxy`](https://github.com/telesma-app/windows-proxy); see [`examples/namedpipe`](examples/namedpipe)    |
-| ISO 7816 / NFC        | Wraps an exclusive raw APDU connection such as [`telesma-app/pcsc`](https://github.com/telesma-app/pcsc); see [`examples/iso7816`](examples/iso7816) |
+| ISO 7816 / NFC        | PC/SC via `backend/pcsc` or a custom APDU connection; see [`examples/iso7816`](examples/iso7816) |
 | Token2 CTAP over APDU | Requires a PC/SC implementation such as [`telesma-app/pcsc`](https://github.com/telesma-app/pcsc); see [`examples/token2`](examples/token2)          |
 | Bluetooth LE          | Experimental cgo-free CoreBluetooth backend for FIDO authenticators on macOS amd64/arm64; see [`examples/ble`](examples/ble)                         |
 
@@ -184,6 +184,10 @@ wire compatibility and test vectors; callers must keep their direct use outside 
   [`telesma-app/iso7816`](https://github.com/telesma-app/iso7816), and Token2 status-word errors as
   `*token2.APDUError`.
 - Device I/O accepts `context.Context`. Cancellation depends on transport support.
+- `ctaphid.Open` and `iso7816.Open` take ownership on success; callers retain ownership on failure.
+- `ctaphid.Transport.InitResponse()` returns the cached INIT response without I/O.
+- `iso7816.Select`, `CBOR`, and `Deselect` borrow a card. The caller serializes access and closes it on
+  `transport.DeviceInvalidatedError`.
 
 ### Diagnostic logging
 

@@ -90,7 +90,7 @@ func TestCBORSkipsUnexpectedResponseCID(t *testing.T) {
 	}
 
 	dev := &scriptedDevice{reads: bytes.NewReader(reads.Bytes())}
-	_, err = NewTransport(dev, ChannelID{1, 2, 3, 4}).CBOR(context.Background(), []byte{0x04})
+	_, err = newTestTransport(dev, ChannelID{1, 2, 3, 4}).CBOR(context.Background(), []byte{0x04})
 	if err == nil {
 		t.Fatalf("expected an error")
 	}

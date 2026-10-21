@@ -123,7 +123,7 @@ func TestCommandsReturnTypedCTAPHIDError(t *testing.T) {
 			requestData: []byte{1, 2, 3, 4, 5, 6, 7, 8},
 			responseErr: ERR_INVALID_CHANNEL,
 			invoke: func(ctx context.Context, dev *scriptedDevice, cid ChannelID) error {
-				_, err := Init(ctx, dev, cid, []byte{1, 2, 3, 4, 5, 6, 7, 8})
+				_, err := Init(ctx, dev, cid, [8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 				return err
 			},
 		},
@@ -172,27 +172,11 @@ func TestCommandsReturnTypedCTAPHIDError(t *testing.T) {
 	}
 }
 
-func TestCBORRejectsMissingCommandByte(t *testing.T) {
-	dev := &scriptedDevice{reads: bytes.NewReader(nil)}
-
-	_, err := CBOR(context.Background(), dev, ChannelID{1, 2, 3, 4}, nil)
-	if err == nil {
-		t.Fatalf("expected an error")
-	}
-	if got := errors.Is(err, ErrInvalidRequestMessage); !got {
-		t.Errorf("got false, want true")
-	}
-	if got := dev.writes.Bytes(); len(got) != 0 {
-		t.Errorf("got non-empty value %#v", got)
-	}
-}
-
 func TestInitAcceptsExtendedSuccessResponse(t *testing.T) {
-	// CTAP 2.3 PS, 11.2.9.1.3: INIT response is at least 17 bytes, and
-	// hosts SHALL accept longer responses for future-compatible extensions.
-	nonce := []byte{1, 2, 3, 4, 5, 6, 7, 8}
+	// CTAP 2.3, section 11.2.9.1.3 requires accepting INIT responses longer than 17 bytes.
+	nonce := [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
 	allocatedCID := ChannelID{9, 8, 7, 6}
-	responseData := append([]byte{}, nonce...)
+	responseData := append([]byte{}, nonce[:]...)
 	responseData = append(responseData, allocatedCID[:]...)
 	responseData = append(responseData, 2, 3, 4, 5, byte(CAPABILITY_WINK)|byte(CAPABILITY_CBOR))
 	responseData = append(responseData, 0xfe, 0xed)
@@ -205,7 +189,7 @@ func TestInitAcceptsExtendedSuccessResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got, want := resp.Nonce, nonce; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
+	if got, want := resp.Nonce, nonce; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
 	if got, want := resp.CID, allocatedCID; got != want {
@@ -233,28 +217,13 @@ func TestInitAcceptsExtendedSuccessResponse(t *testing.T) {
 		t.Errorf("got true, want false")
 	}
 
-	assertSingleReportRequest(t, dev.writes.Bytes(), BROADCAST_CID, CTAPHID_INIT, nonce)
-}
-
-func TestInitRejectsInvalidNonceLength(t *testing.T) {
-	dev := &scriptedDevice{reads: bytes.NewReader(nil)}
-
-	_, err := Init(context.Background(), dev, BROADCAST_CID, []byte{1, 2, 3, 4, 5, 6, 7})
-	if err == nil {
-		t.Fatalf("expected an error")
-	}
-	if got := errors.Is(err, ErrInvalidRequestMessage); !got {
-		t.Errorf("got false, want true")
-	}
-	if got := dev.writes.Bytes(); len(got) != 0 {
-		t.Errorf("got non-empty value %#v", got)
-	}
+	assertSingleReportRequest(t, dev.writes.Bytes(), BROADCAST_CID, CTAPHID_INIT, nonce[:])
 }
 
 func TestInitSkipsAnotherClientResponse(t *testing.T) {
-	nonce := []byte{1, 2, 3, 4, 5, 6, 7, 8}
+	nonce := [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
 	otherResponse := []byte{8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 2, 3, 4, 5, byte(CAPABILITY_CBOR)}
-	response := append([]byte{}, nonce...)
+	response := append([]byte{}, nonce[:]...)
 	response = append(response, 9, 8, 7, 6, 2, 3, 4, 5, byte(CAPABILITY_CBOR))
 	reads := bytes.NewBuffer(nil)
 	reads.Write(rawResponseMessage(t, BROADCAST_CID, CTAPHID_INIT, otherResponse))

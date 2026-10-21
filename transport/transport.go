@@ -48,8 +48,7 @@ const (
 	IOClose    IOOperation = "close"
 )
 
-// IOError reports an error returned by an underlying transport connection.
-// The original error remains available through errors.Is and errors.As.
+// IOError wraps a connection error and identifies the failed operation.
 type IOError struct {
 	Operation IOOperation
 	Err       error
@@ -63,8 +62,8 @@ func (e *IOError) Unwrap() error {
 	return e.Err
 }
 
-// DeviceInvalidatedError wraps an operation error when the transport closed
-// the device it owned and the device can no longer be used.
+// DeviceInvalidatedError marks a connection that must not be reused.
+// Owned transports close it before returning; callers must close borrowed connections.
 type DeviceInvalidatedError struct {
 	Err error
 }
@@ -83,8 +82,8 @@ type CBOR interface {
 	CBOR(ctx context.Context, data []byte) (CBORResponse, error)
 }
 
-// Device is an owned CTAP transport connection. Close must be safe to call
-// concurrently with CBOR and should unblock any in-flight exchange.
+// Device is an owned CTAP connection.
+// Close must be safe alongside CBOR and should unblock it.
 type Device interface {
 	CBOR
 	io.Closer

@@ -2,8 +2,6 @@ package ctaphid
 
 import (
 	"context"
-	"crypto/subtle"
-	"slices"
 
 	"github.com/telesma-app/ctap/protocol"
 	"github.com/telesma-app/ctap/transport"
@@ -17,18 +15,8 @@ func ensureDataLen(data []byte, min int) error {
 	return nil
 }
 
-func responseMatchesCID(msg Message, cid ChannelID) (bool, error) {
-	if len(msg) < 1 {
-		return false, ErrInvalidResponseMessage
-	}
-
-	return msg[0].cid == cid, nil
-}
-
 func writeCBOR(ctx context.Context, dev Device, cid ChannelID, data []byte) (protocol.Command, error) {
-	if len(data) < 1 {
-		return 0, ErrInvalidRequestMessage
-	}
+	command := protocol.Command(data[0])
 
 	msg, err := NewMessage(cid, CTAPHID_CBOR, data)
 	if err != nil {
@@ -37,10 +25,10 @@ func writeCBOR(ctx context.Context, dev Device, cid ChannelID, data []byte) (pro
 	if _, err := msg.WriteTo(ghid.WithContext(ctx, dev)); err != nil {
 		return 0, err
 	}
-	return protocol.Command(data[0]), nil
+	return command, nil
 }
 
-// CBOR exchanges a CBOR command on an allocated CTAPHID channel.
+// CBOR exchanges data, starting with a CTAP command byte, on an allocated channel.
 func CBOR(ctx context.Context, dev Device, cid ChannelID, data []byte) (transport.CBORResponse, error) {
 	command, err := writeCBOR(ctx, dev, cid, data)
 	if err != nil {
@@ -52,47 +40,37 @@ func CBOR(ctx context.Context, dev Device, cid ChannelID, data []byte) (transpor
 func readCBORResponse(ctx context.Context, dev Device, cid ChannelID, command protocol.Command) (transport.CBORResponse, error) {
 	bound := ghid.WithContext(ctx, dev)
 
-read:
 	for {
-		respMsg := make(Message, 0)
+		var respMsg Message
 		if _, err := respMsg.ReadFrom(bound); err != nil {
 			return transport.CBORResponse{}, err
 		}
 
-		matches, err := responseMatchesCID(respMsg, cid)
-		if err != nil {
-			return transport.CBORResponse{}, err
-		}
-		if !matches {
+		if respMsg.CID() != cid {
 			continue
 		}
 
-		var respData []byte
-		for i, p := range respMsg {
-			if i == 0 {
-				switch p.command {
-				case CTAPHID_CBOR:
-					if err := ensureDataLen(p.data, 1); err != nil {
-						return transport.CBORResponse{}, err
-					}
-				case CTAPHID_ERROR:
-					if err := ensureDataLen(p.data, 1); err != nil {
-						return transport.CBORResponse{}, err
-					}
-					return transport.CBORResponse{}, &ErrorResponse{ErrorCode: Error(p.data[0])}
-				case CTAPHID_KEEPALIVE:
-					continue read
-				default:
-					return transport.CBORResponse{}, ErrUnexpectedCommand
-				}
+		p := respMsg[0]
+		switch p.command {
+		case CTAPHID_CBOR:
+			if err := ensureDataLen(p.data, 1); err != nil {
+				return transport.CBORResponse{}, err
 			}
-
-			respData = slices.Concat(respData, p.data)
+		case CTAPHID_ERROR:
+			if err := ensureDataLen(p.data, 1); err != nil {
+				return transport.CBORResponse{}, err
+			}
+			return transport.CBORResponse{}, &ErrorResponse{ErrorCode: Error(p.data[0])}
+		case CTAPHID_KEEPALIVE:
+			continue
+		default:
+			return transport.CBORResponse{}, ErrUnexpectedCommand
 		}
-		if err := ensureDataLen(respData, 1); err != nil {
-			return transport.CBORResponse{}, err
-		}
 
+		var respData []byte
+		for _, p := range respMsg {
+			respData = append(respData, p.data...)
+		}
 		response := transport.CBORResponse{
 			StatusCode: transport.StatusCode(respData[0]),
 			Data:       respData[1:],
@@ -103,12 +81,8 @@ read:
 }
 
 // Init initializes a CTAPHID channel.
-func Init(ctx context.Context, dev Device, cid ChannelID, nonce []byte) (InitResponse, error) {
-	if len(nonce) != 8 {
-		return InitResponse{}, ErrInvalidRequestMessage
-	}
-
-	msg, err := NewMessage(cid, CTAPHID_INIT, nonce)
+func Init(ctx context.Context, dev Device, cid ChannelID, nonce [8]byte) (InitResponse, error) {
+	msg, err := NewMessage(cid, CTAPHID_INIT, nonce[:])
 	if err != nil {
 		return InitResponse{}, err
 	}
@@ -119,16 +93,12 @@ func Init(ctx context.Context, dev Device, cid ChannelID, nonce []byte) (InitRes
 	}
 
 	for {
-		respMsg := make(Message, 0)
+		var respMsg Message
 		if _, err := respMsg.ReadFrom(bound); err != nil {
 			return InitResponse{}, err
 		}
 
-		matches, err := responseMatchesCID(respMsg, cid)
-		if err != nil {
-			return InitResponse{}, err
-		}
-		if !matches {
+		if respMsg.CID() != cid {
 			continue
 		}
 
@@ -139,13 +109,13 @@ func Init(ctx context.Context, dev Device, cid ChannelID, nonce []byte) (InitRes
 			if err := ensureDataLen(p.data, 17); err != nil {
 				return InitResponse{}, err
 			}
-			if subtle.ConstantTimeCompare(p.data[:8], nonce) != 1 {
+			if [8]byte(p.data[:8]) != nonce {
 				// Broadcast INIT responses from other clients use the same CID.
 				continue
 			}
 
 			r := InitResponse{
-				Nonce:                            p.data[:8],
+				Nonce:                            [8]byte(p.data[:8]),
 				CID:                              ChannelID(p.data[8 : 8+4]),
 				CTAPHIDProtocolVersionIdentifier: p.data[12],
 				MajorDeviceVersion:               p.data[13],
@@ -180,52 +150,40 @@ func Ping(ctx context.Context, dev Device, cid ChannelID, data []byte) (PingResp
 		return PingResponse{}, err
 	}
 
-read:
 	for {
-		respMsg := make(Message, 0)
+		var respMsg Message
 		if _, err := respMsg.ReadFrom(bound); err != nil {
 			return PingResponse{}, err
 		}
 
-		matches, err := responseMatchesCID(respMsg, cid)
-		if err != nil {
-			return PingResponse{}, err
-		}
-		if !matches {
+		if respMsg.CID() != cid {
 			continue
 		}
 
-		var pong []byte
-		for i, p := range respMsg {
-			if i == 0 {
-				switch p.command {
-				case CTAPHID_PING:
-				case CTAPHID_ERROR:
-					if err := ensureDataLen(p.data, 1); err != nil {
-						return PingResponse{}, err
-					}
-					return PingResponse{}, &ErrorResponse{ErrorCode: Error(p.data[0])}
-				case CTAPHID_KEEPALIVE:
-					continue read
-				default:
-					return PingResponse{}, ErrUnexpectedCommand
-				}
+		p := respMsg[0]
+		switch p.command {
+		case CTAPHID_PING:
+		case CTAPHID_ERROR:
+			if err := ensureDataLen(p.data, 1); err != nil {
+				return PingResponse{}, err
 			}
-
-			pong = slices.Concat(pong, p.data)
+			return PingResponse{}, &ErrorResponse{ErrorCode: Error(p.data[0])}
+		case CTAPHID_KEEPALIVE:
+			continue
+		default:
+			return PingResponse{}, ErrUnexpectedCommand
 		}
 
-		r := PingResponse{
-			Bytes: pong,
+		var pong []byte
+		for _, p := range respMsg {
+			pong = append(pong, p.data...)
 		}
 
-		return r, nil
+		return PingResponse{Bytes: pong}, nil
 	}
 }
 
-// Vendor sends a command from the CTAPHID vendor-specific range (0x40-0x7f).
-// Command values do not include INIT_PACKET_BIT; NewMessage adds that bit when
-// encoding the initial HID packet.
+// Vendor sends a CTAPHID command in 0x40-0x7f, without INIT_PACKET_BIT.
 func Vendor(ctx context.Context, dev Device, cid ChannelID, command Command, data []byte) (VendorResponse, error) {
 	if command < CTAPHID_VENDOR_FIRST || command > CTAPHID_VENDOR_LAST {
 		return VendorResponse{}, ErrInvalidRequestMessage
@@ -240,36 +198,31 @@ func Vendor(ctx context.Context, dev Device, cid ChannelID, command Command, dat
 		return VendorResponse{}, err
 	}
 
-read:
 	for {
-		respMsg := make(Message, 0)
+		var respMsg Message
 		if _, err := respMsg.ReadFrom(bound); err != nil {
 			return VendorResponse{}, err
 		}
-		matches, err := responseMatchesCID(respMsg, cid)
-		if err != nil {
-			return VendorResponse{}, err
-		}
-		if !matches {
+		if respMsg.CID() != cid {
 			continue
 		}
 
-		var response []byte
-		for i, p := range respMsg {
-			if i == 0 {
-				switch p.command {
-				case command:
-				case CTAPHID_ERROR:
-					if err := ensureDataLen(p.data, 1); err != nil {
-						return VendorResponse{}, err
-					}
-					return VendorResponse{}, &ErrorResponse{ErrorCode: Error(p.data[0])}
-				case CTAPHID_KEEPALIVE:
-					continue read
-				default:
-					return VendorResponse{}, ErrUnexpectedCommand
-				}
+		p := respMsg[0]
+		switch p.command {
+		case command:
+		case CTAPHID_ERROR:
+			if err := ensureDataLen(p.data, 1); err != nil {
+				return VendorResponse{}, err
 			}
+			return VendorResponse{}, &ErrorResponse{ErrorCode: Error(p.data[0])}
+		case CTAPHID_KEEPALIVE:
+			continue
+		default:
+			return VendorResponse{}, ErrUnexpectedCommand
+		}
+
+		var response []byte
+		for _, p := range respMsg {
 			response = append(response, p.data...)
 		}
 
@@ -304,16 +257,12 @@ func Wink(ctx context.Context, dev Device, cid ChannelID) error {
 	}
 
 	for {
-		respMsg := make(Message, 0)
+		var respMsg Message
 		if _, err := respMsg.ReadFrom(bound); err != nil {
 			return err
 		}
 
-		matches, err := responseMatchesCID(respMsg, cid)
-		if err != nil {
-			return err
-		}
-		if !matches {
+		if respMsg.CID() != cid {
 			continue
 		}
 
@@ -352,16 +301,12 @@ func Lock(ctx context.Context, dev Device, cid ChannelID, seconds uint8) error {
 	}
 
 	for {
-		respMsg := make(Message, 0)
+		var respMsg Message
 		if _, err := respMsg.ReadFrom(bound); err != nil {
 			return err
 		}
 
-		matches, err := responseMatchesCID(respMsg, cid)
-		if err != nil {
-			return err
-		}
-		if !matches {
+		if respMsg.CID() != cid {
 			continue
 		}
 

@@ -12,7 +12,6 @@ const (
 	continuationPacketDataSize   = hidPacketSize - continuationPacketHeaderSize
 )
 
-// packet represents CTAP packet.
 type packet struct {
 	cid          ChannelID
 	command      Command
@@ -22,16 +21,15 @@ type packet struct {
 	continuation bool
 }
 
-// ChannelID represents CTAP channel ID.
+// ChannelID identifies a CTAPHID channel.
 type ChannelID [4]byte
 
-// BROADCAST_CID represents CTAP broadcast channel ID.
+// BROADCAST_CID is the channel used for allocation.
 var BROADCAST_CID = ChannelID{0xff, 0xff, 0xff, 0xff}
 
-// InitResponse represents CTAPHID_INIT (0x06) command response.
-// https://fidoalliance.org/specs/fido-v2.2-ps-20250228/fido-client-to-authenticator-protocol-v2.2-ps-20250228.html#usb-hid-init
+// InitResponse is a CTAPHID_INIT response.
 type InitResponse struct {
-	Nonce                            []byte
+	Nonce                            [8]byte
 	CID                              ChannelID
 	CTAPHIDProtocolVersionIdentifier byte
 	MajorDeviceVersion               byte
@@ -56,8 +54,7 @@ func (r *InitResponse) NotImplementsMSG() bool {
 	return r.CapabilityFlags&byte(CAPABILITY_NMSG) != 0
 }
 
-// PingResponse represents CTAPHID_PING command response.
-// https://fidoalliance.org/specs/fido-v2.2-ps-20250228/fido-client-to-authenticator-protocol-v2.2-ps-20250228.html#usb-hid-ping
+// PingResponse contains the CTAPHID_PING echo.
 type PingResponse struct {
 	Bytes []byte
 }
@@ -67,15 +64,12 @@ type ErrorResponse struct {
 	ErrorCode Error
 }
 
-// Error returns the symbolic CTAPHID error code. ErrorCode remains the
-// authoritative response byte, including for unknown and vendor-defined
-// values.
+// Error returns the symbolic name of ErrorCode.
 func (r *ErrorResponse) Error() string {
 	return r.ErrorCode.String()
 }
 
-// VendorResponse contains the opaque response payload of a CTAPHID vendor
-// command.
+// VendorResponse contains a vendor command's opaque payload.
 type VendorResponse struct {
 	Data []byte
 }

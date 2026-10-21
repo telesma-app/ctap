@@ -4,10 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"slices"
-	"sync"
-	"time"
 
 	"github.com/telesma-app/ctap/protocol"
 	ctaptransport "github.com/telesma-app/ctap/transport"
@@ -19,8 +15,6 @@ var (
 	ErrUnsupportedVersion = errors.New("iso7816: unsupported FIDO applet version")
 )
 
-var fidoAppletAID = []byte{0xa0, 0x00, 0x00, 0x06, 0x47, 0x2f, 0x00, 0x01}
-
 const (
 	claISO                = 0x00
 	claCTAP               = 0x80
@@ -31,16 +25,12 @@ const (
 	p1SelectByName        = 0x04
 	p1SupportsGetResponse = 0x80
 	p1EndCTAPMsg          = 0x01
-	// CTAP 2.3 defines P1=0x11 on NFCCTAP_GETRESPONSE as cancellation.
-	// Older authenticators may reject it; cancelPolling then closes and
-	// invalidates the transport because the pending command cannot be drained
-	// safely.
+	// CTAP 2.3 NFC cancellation.
 	p1Cancel                 = 0x11
-	statusResponse           = 0x91
-	statusResponseFinal      = 0x00
 	shortCommandFragmentSize = 240
 	maxMessageSize           = 0xffff
-	closeTimeout             = time.Second
+
+	statusKeepalive baseiso7816.StatusWord = 0x9100
 )
 
 var (
@@ -48,7 +38,7 @@ var (
 		CLA:      claISO,
 		INS:      insSelect,
 		P1:       p1SelectByName,
-		Data:     fidoAppletAID,
+		Data:     []byte{0xa0, 0x00, 0x00, 0x06, 0x47, 0x2f, 0x00, 0x01},
 		Le:       256,
 		Encoding: baseiso7816.EncodingShort,
 	}
@@ -65,7 +55,7 @@ var (
 		Le:       256,
 		Encoding: baseiso7816.EncodingShort,
 	}
-	endSessionCommand = baseiso7816.Command{
+	deselectAppletCommand = baseiso7816.Command{
 		CLA:      claCTAP,
 		INS:      insNFCCTAPControl,
 		P1:       p1EndCTAPMsg,
@@ -73,14 +63,8 @@ var (
 	}
 )
 
-// Card is the raw APDU subset implemented by pcsc.Card.
-type Card interface {
-	io.Closer
-	baseiso7816.Card
-}
-
 type ioCard struct {
-	Card
+	baseiso7816.Card
 }
 
 func (c ioCard) Transmit(ctx context.Context, apdu []byte) ([]byte, error) {
@@ -92,89 +76,73 @@ func (c ioCard) Transmit(ctx context.Context, apdu []byte) ([]byte, error) {
 	return response, nil
 }
 
-func (c ioCard) Close() error {
-	err := c.Card.Close()
-	if err != nil {
-		return &ctaptransport.IOError{Operation: ctaptransport.IOClose, Err: err}
+func invalidateOnError(err error) error {
+	_, ioFailure := errors.AsType[*ctaptransport.IOError](err)
+	if ioFailure || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return &ctaptransport.DeviceInvalidatedError{Err: err}
 	}
 
-	return nil
+	return err
 }
 
-// Transport carries CTAP2 commands through the standard FIDO ISO 7816 applet.
-type Transport struct {
-	card      ioCard
-	mu        sync.Mutex
-	closeOnce sync.Once
-	closeErr  error
-}
-
-var _ ctaptransport.Device = (*Transport)(nil)
-
-// New selects the standard FIDO applet and returns an initialized transport.
-// The caller retains ownership of card if initialization fails.
-func New(ctx context.Context, card Card) (*Transport, error) {
-	if card == nil {
-		return nil, errors.New("iso7816: nil card")
+// Select activates the FIDO applet and returns its version.
+// Call it before CBOR and after switching applets.
+func Select(ctx context.Context, rawCard baseiso7816.Card) (protocol.Version, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
 	}
 
-	t := &Transport{card: ioCard{Card: card}}
+	card := ioCard{Card: rawCard}
 	response, err := baseiso7816.Exchange(
 		ctx,
-		t.card,
+		card,
 		selectAppletCommand,
 		baseiso7816.WithMoreDataStatusBytes(0x61, 0x9f),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("iso7816: select FIDO applet: %w", err)
+		return "", fmt.Errorf("iso7816: select FIDO applet: %w", invalidateOnError(err))
 	}
-	if response.Status != baseiso7816.StatusSuccess {
-		return nil, fmt.Errorf(
-			"iso7816: select FIDO applet: %w",
-			response.APDUError(),
-		)
+	if err := response.APDUError(); err != nil {
+		return "", fmt.Errorf("iso7816: select FIDO applet: %w", err)
 	}
 
-	switch protocol.Version(response.Data) {
+	version := protocol.Version(response.Data)
+	switch version {
 	case protocol.FIDO_2_0, protocol.U2F_V2:
+		return version, nil
 	default:
-		return nil, fmt.Errorf("%w: %q", ErrUnsupportedVersion, response.Data)
+		return "", fmt.Errorf("%w: %q", ErrUnsupportedVersion, response.Data)
 	}
-
-	return t, nil
 }
 
-// CBOR sends a CTAP command byte and CBOR payload through NFCCTAP_MSG. It uses
-// short APDU chaining and advertises support for NFCCTAP_GETRESPONSE polling.
-func (t *Transport) CBOR(ctx context.Context, data []byte) (ctaptransport.CBORResponse, error) {
-	if len(data) < 1 {
-		return ctaptransport.CBORResponse{}, errors.New("iso7816: empty CTAP command")
-	}
+// CBOR exchanges a CTAP command byte and payload with the selected applet.
+// An already canceled context preserves the card. Later cancellation invalidates
+// it unless a terminal response is received.
+func CBOR(ctx context.Context, card baseiso7816.Card, data []byte) (ctaptransport.CBORResponse, error) {
+	command := protocol.Command(data[0])
 	if len(data) > maxMessageSize {
 		return ctaptransport.CBORResponse{}, ErrCommandTooLarge
 	}
-
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return ctaptransport.CBORResponse{}, err
 	}
 
-	response, err := t.exchangeCTAP(ctx, data)
+	response, err := exchangeCTAP(ctx, card, data)
 	if err != nil {
-		return ctaptransport.CBORResponse{}, t.closeOnIOError(ctx, err)
+		return ctaptransport.CBORResponse{}, err
 	}
 	if len(response) < 1 {
 		return ctaptransport.CBORResponse{}, baseiso7816.ErrInvalidResponse
 	}
 
-	return ctaptransport.ValidateCBORResponse(protocol.Command(data[0]), ctaptransport.CBORResponse{
+	return ctaptransport.ValidateCBORResponse(command, ctaptransport.CBORResponse{
 		StatusCode: ctaptransport.StatusCode(response[0]),
-		Data:       slices.Clone(response[1:]),
+		Data:       response[1:],
 	})
 }
 
-func (t *Transport) exchangeCTAP(ctx context.Context, data []byte) ([]byte, error) {
+func exchangeCTAP(ctx context.Context, rawCard baseiso7816.Card, data []byte) ([]byte, error) {
+	card := ioCard{Card: rawCard}
 	commands, err := baseiso7816.Chain(baseiso7816.Command{
 		CLA:      claCTAP,
 		INS:      insNFCCTAPMsg,
@@ -188,9 +156,9 @@ func (t *Transport) exchangeCTAP(ctx context.Context, data []byte) ([]byte, erro
 	commands[len(commands)-1].P1 = p1SupportsGetResponse
 
 	for _, command := range commands[:len(commands)-1] {
-		response, err := baseiso7816.Transmit(ctx, t.card, command)
+		response, err := baseiso7816.Transmit(ctx, card, command)
 		if err != nil {
-			return nil, err
+			return nil, invalidateOnError(err)
 		}
 		if err := response.APDUError(); err != nil {
 			return nil, err
@@ -202,33 +170,33 @@ func (t *Transport) exchangeCTAP(ctx context.Context, data []byte) ([]byte, erro
 
 	response, err := baseiso7816.Exchange(
 		ctx,
-		t.card,
+		card,
 		commands[len(commands)-1],
 		baseiso7816.WithMoreDataStatusBytes(0x61, 0x9f),
 	)
 	if err != nil {
-		return nil, err
+		return nil, invalidateOnError(err)
 	}
 
-	for response.Status == baseiso7816.NewStatusWord(statusResponse, statusResponseFinal) {
+	for response.Status == statusKeepalive {
 		if len(response.Data) != 1 {
 			return nil, baseiso7816.ErrInvalidResponse
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, t.cancelPolling(ctx, ctxErr)
+			return nil, cancelPolling(ctx, rawCard, ctxErr)
 		}
 
 		response, err = baseiso7816.Exchange(
 			ctx,
-			t.card,
+			card,
 			getResponseCommand,
 			baseiso7816.WithMoreDataStatusBytes(0x61, 0x9f),
 		)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
-				return nil, t.cancelPolling(ctx, err)
+				return nil, cancelPolling(ctx, rawCard, err)
 			}
-			return nil, err
+			return nil, invalidateOnError(err)
 		}
 	}
 
@@ -239,69 +207,38 @@ func (t *Transport) exchangeCTAP(ctx context.Context, data []byte) ([]byte, erro
 	return response.Data, nil
 }
 
-func (t *Transport) cancelPolling(ctx context.Context, originalErr error) error {
+func cancelPolling(ctx context.Context, rawCard baseiso7816.Card, originalErr error) error {
 	cancelCtx := context.WithoutCancel(ctx)
 	response, err := baseiso7816.Exchange(
 		cancelCtx,
-		t.card,
+		rawCard,
 		cancelGetResponseCommand,
 		baseiso7816.WithMoreDataStatusBytes(0x61, 0x9f),
 	)
-	if err == nil &&
-		(response.Status != baseiso7816.StatusSuccess ||
-			len(response.Data) != 1 ||
-			ctaptransport.StatusCode(response.Data[0]) != ctaptransport.CTAP2_ERR_KEEPALIVE_CANCEL) {
-		err = baseiso7816.ErrInvalidResponse
-	}
-	if err == nil {
+	if err == nil && response.Status == baseiso7816.StatusSuccess &&
+		len(response.Data) == 1 &&
+		ctaptransport.StatusCode(response.Data[0]) == ctaptransport.CTAP2_ERR_KEEPALIVE_CANCEL {
 		return originalErr
 	}
 
-	// A rejected or malformed cancellation leaves no proof that the pending
-	// CTAP command reached a terminal state. Do not allow another APDU to be
-	// mistaken for the continuation of that command.
-	_ = t.Close()
+	// No terminal response: the card cannot be reused.
 	return &ctaptransport.DeviceInvalidatedError{Err: originalErr}
 }
 
-func (t *Transport) closeOnIOError(ctx context.Context, err error) error {
-	ioErr, ok := errors.AsType[*ctaptransport.IOError](err)
-	if !ok || ioErr.Operation != ctaptransport.IOTransmit {
+// Deselect disables FIDO without closing the card. Call Select to use FIDO again.
+func Deselect(ctx context.Context, rawCard baseiso7816.Card) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
-		return err
+	card := ioCard{Card: rawCard}
+	response, err := baseiso7816.Transmit(ctx, card, deselectAppletCommand)
+	if err == nil {
+		err = response.APDUError()
+	}
+	if err != nil {
+		return fmt.Errorf("iso7816: deselect FIDO applet: %w", invalidateOnError(err))
 	}
 
-	_ = t.Close()
-	return &ctaptransport.DeviceInvalidatedError{Err: err}
-}
-
-// Close disables the selected FIDO applet when no operation is in flight, then
-// closes the underlying card. If an operation holds the transport lock, Close
-// skips the control APDU so it can close the card immediately and interrupt the
-// blocked operation.
-func (t *Transport) Close() error {
-	t.closeOnce.Do(func() {
-		if !t.mu.TryLock() {
-			t.closeErr = t.card.Close()
-			return
-		}
-		defer t.mu.Unlock()
-
-		ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
-		defer cancel()
-
-		response, endErr := baseiso7816.Transmit(ctx, t.card, endSessionCommand)
-		if endErr == nil && response.Status != baseiso7816.StatusSuccess {
-			endErr = response.APDUError()
-		}
-		if endErr != nil {
-			endErr = fmt.Errorf("iso7816: end FIDO applet session: %w", endErr)
-		}
-
-		t.closeErr = errors.Join(endErr, t.card.Close())
-	})
-	return t.closeErr
+	return nil
 }

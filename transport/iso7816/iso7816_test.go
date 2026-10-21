@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
+	"slices"
 	"testing"
 
 	"github.com/telesma-app/ctap/protocol"
@@ -25,48 +25,50 @@ type fakeCard struct {
 	t          *testing.T
 	exchanges  []exchange
 	closeErr   error
-	closed     bool
 	closeCalls int
 }
 
-func (c *fakeCard) Transmit(ctx context.Context, apdu []byte) ([]byte, error) {
+func (c *fakeCard) Transmit(_ context.Context, apdu []byte) ([]byte, error) {
 	c.t.Helper()
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	if c.closeCalls != 0 {
+		return nil, io.ErrClosedPipe
 	}
-	if got := c.exchanges; len(got) == 0 {
-		c.t.Fatalf("got empty value %#v, want non-empty; context: %s", got, fmt.Sprintf("unexpected APDU: %x", apdu))
+	if len(c.exchanges) == 0 {
+		c.t.Fatalf("unexpected APDU: %x", apdu)
 	}
 	next := c.exchanges[0]
 	c.exchanges = c.exchanges[1:]
 	if got, want := apdu, next.request; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		c.t.Errorf("got %#v, want %#v", got, want)
 	}
-	response := bytes.Clone(next.response)
 	if next.after != nil {
 		next.after()
 	}
-	return response, next.err
+	return next.response, next.err
 }
 
 func (c *fakeCard) Close() error {
 	c.closeCalls++
-	c.closed = true
 	return c.closeErr
 }
 
-func newFakeTransport(t *testing.T, exchanges ...exchange) (*Transport, *fakeCard) {
+func newSelectedCard(t *testing.T, exchanges ...exchange) *fakeCard {
 	t.Helper()
 	card := &fakeCard{t: t, exchanges: append([]exchange{{
 		request:  commandBytes(t, selectAppletCommand),
 		response: append([]byte(protocol.FIDO_2_0), 0x90, 0x00),
 	}}, exchanges...)}
 
-	transport, err := New(context.Background(), card)
+	_, err := Select(t.Context(), card)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	return transport, card
+	t.Cleanup(func() {
+		if card.closeCalls != 0 {
+			t.Errorf("borrowed card closed %d times", card.closeCalls)
+		}
+	})
+	return card
 }
 
 func commandBytes(t testing.TB, command baseiso7816.Command) []byte {
@@ -92,35 +94,30 @@ func TestCTAP23ControlCommands(t *testing.T) {
 		}
 	}
 	{
-		want, got := []byte{0x80, 0x12, 0x01, 0x00}, commandBytes(t, endSessionCommand)
+		want, got := []byte{0x80, 0x12, 0x01, 0x00}, commandBytes(t, deselectAppletCommand)
 		if (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
 	}
 }
 
-func TestNewSelectsFIDOApplet(t *testing.T) {
-	_, card := newFakeTransport(t)
-
-	if got := card.exchanges; len(got) != 0 {
-		t.Fatalf("got non-empty value %#v", got)
+func TestSelectReturnsAdvertisedVersion(t *testing.T) {
+	for _, want := range []protocol.Version{protocol.FIDO_2_0, protocol.U2F_V2} {
+		card := &fakeCard{t: t, exchanges: []exchange{{
+			request:  commandBytes(t, selectAppletCommand),
+			response: append([]byte(want), 0x90, 0x00),
+		}}}
+		got, err := Select(t.Context(), card)
+		if err != nil || got != want {
+			t.Fatalf("Select = %q, %v; want %q", got, err, want)
+		}
+		if len(card.exchanges) != 0 || card.closeCalls != 0 {
+			t.Fatalf("remaining APDUs = %d, closes = %d", len(card.exchanges), card.closeCalls)
+		}
 	}
 }
 
-func TestNewAcceptsCombinedCTAP1AndCTAP2Version(t *testing.T) {
-	card := &fakeCard{t: t, exchanges: []exchange{{
-		request:  commandBytes(t, selectAppletCommand),
-		response: append([]byte(protocol.U2F_V2), 0x90, 0x00),
-	}}}
-
-	_, err := New(context.Background(), card)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestNewReassemblesChainedSelectionResponse(t *testing.T) {
+func TestSelectReassemblesChainedSelectionResponse(t *testing.T) {
 	card := &fakeCard{t: t, exchanges: []exchange{
 		{request: commandBytes(t, selectAppletCommand), response: []byte("FIDO_"), err: nil},
 	}}
@@ -130,36 +127,36 @@ func TestNewReassemblesChainedSelectionResponse(t *testing.T) {
 		response: []byte{'2', '_', '0', 0x90, 0x00},
 	})
 
-	_, err := New(context.Background(), card)
+	_, err := Select(t.Context(), card)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestNewRejectsUnsupportedSelectionVersion(t *testing.T) {
+func TestSelectRejectsUnsupportedSelectionVersion(t *testing.T) {
 	card := &fakeCard{t: t, exchanges: []exchange{{
 		request:  commandBytes(t, selectAppletCommand),
 		response: append([]byte("OTHER"), 0x90, 0x00),
 	}}}
 
-	_, err := New(context.Background(), card)
+	_, err := Select(t.Context(), card)
 
 	if err, target := err, ErrUnsupportedVersion; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
-	if got := card.closed; got {
-		t.Errorf("got true, want false; context: %s", "the caller retains ownership when initialization fails")
+	if card.closeCalls != 0 {
+		t.Error("Select closed the borrowed card")
 	}
 }
 
 func TestCBORShortAPDU(t *testing.T) {
-	transport, card := newFakeTransport(t, exchange{
+	card := newSelectedCard(t, exchange{
 		request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 		response: []byte{0x00, 0xa1, 0x01, 0x02, 0x90, 0x00},
 	})
 
-	response, err := transport.CBOR(context.Background(), []byte{0x04})
+	response, err := CBOR(context.Background(), card, []byte{0x04})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -180,16 +177,16 @@ func TestCBORShortAPDU(t *testing.T) {
 
 func TestCBORUsesShortCommandChaining(t *testing.T) {
 	command := append([]byte{0x01}, bytes.Repeat([]byte{0xaa}, 249)...)
-	transport, card := newFakeTransport(t,
+	card := newSelectedCard(t,
 		exchange{
-			request: slicesConcat(
+			request: slices.Concat(
 				[]byte{0x90, 0x10, 0x00, 0x00, 0xf0},
 				command[:shortCommandFragmentSize],
 			),
 			response: []byte{0x90, 0x00},
 		},
 		exchange{
-			request: slicesConcat(
+			request: slices.Concat(
 				[]byte{0x80, 0x10, 0x80, 0x00, 0x0a},
 				command[shortCommandFragmentSize:],
 				[]byte{0x00},
@@ -198,7 +195,7 @@ func TestCBORUsesShortCommandChaining(t *testing.T) {
 		},
 	)
 
-	response, err := transport.CBOR(context.Background(), command)
+	response, err := CBOR(context.Background(), card, command)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -212,7 +209,7 @@ func TestCBORUsesShortCommandChaining(t *testing.T) {
 }
 
 func TestCBORReassemblesISOResponseChaining(t *testing.T) {
-	transport, card := newFakeTransport(t,
+	card := newSelectedCard(t,
 		exchange{
 			request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 			response: []byte{0x00, 0xa1, 0x61, 0x02},
@@ -227,7 +224,7 @@ func TestCBORReassemblesISOResponseChaining(t *testing.T) {
 		},
 	)
 
-	response, err := transport.CBOR(context.Background(), []byte{0x04})
+	response, err := CBOR(context.Background(), card, []byte{0x04})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -247,7 +244,7 @@ func TestCBORReassemblesISOResponseChaining(t *testing.T) {
 }
 
 func TestCBORPollsStatusResponses(t *testing.T) {
-	transport, card := newFakeTransport(t,
+	card := newSelectedCard(t,
 		exchange{
 			request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 			response: []byte{0x01, 0x91, 0x00},
@@ -262,7 +259,7 @@ func TestCBORPollsStatusResponses(t *testing.T) {
 		},
 	)
 
-	response, err := transport.CBOR(context.Background(), []byte{0x04})
+	response, err := CBOR(context.Background(), card, []byte{0x04})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -283,7 +280,7 @@ func TestCBORPollsStatusResponses(t *testing.T) {
 
 func TestCBORCancelsStatusPollingWithContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	transport, card := newFakeTransport(t,
+	card := newSelectedCard(t,
 		exchange{
 			request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 			response: []byte{0x02, 0x91, 0x00},
@@ -295,22 +292,19 @@ func TestCBORCancelsStatusPollingWithContext(t *testing.T) {
 		},
 	)
 
-	_, err := transport.CBOR(ctx, []byte{0x04})
+	_, err := CBOR(ctx, card, []byte{0x04})
 
 	if err, target := err, context.Canceled; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
-	}
-	if got := card.closed; got {
-		t.Errorf("got true, want false")
 	}
 	if got := card.exchanges; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
 }
 
-func TestCBORInvalidatesTransportWhenStatusCancellationIsRejected(t *testing.T) {
+func TestCBORInvalidatesSessionWhenStatusCancellationIsRejected(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	transport, card := newFakeTransport(t,
+	card := newSelectedCard(t,
 		exchange{
 			request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 			response: []byte{0x02, 0x91, 0x00},
@@ -322,7 +316,7 @@ func TestCBORInvalidatesTransportWhenStatusCancellationIsRejected(t *testing.T) 
 		},
 	)
 
-	_, err := transport.CBOR(ctx, []byte{0x04})
+	_, err := CBOR(ctx, card, []byte{0x04})
 
 	if err, target := err, context.Canceled; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
@@ -331,12 +325,6 @@ func TestCBORInvalidatesTransportWhenStatusCancellationIsRejected(t *testing.T) 
 	if got := invalidated; !got {
 		t.Fatalf("got false, want true")
 	}
-	if got := card.closed; !got {
-		t.Errorf("got false, want true")
-	}
-	if got, want := card.closeCalls, 1; got != want {
-		t.Errorf("got %#v, want %#v", got, want)
-	}
 	if got := card.exchanges; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
@@ -344,13 +332,13 @@ func TestCBORInvalidatesTransportWhenStatusCancellationIsRejected(t *testing.T) 
 
 func TestCBORPreservesFinalResponseWhenContextIsCanceledConcurrently(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	transport, card := newFakeTransport(t, exchange{
+	card := newSelectedCard(t, exchange{
 		request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 		response: []byte{0x00, 0xa0, 0x90, 0x00},
 		after:    cancel,
 	})
 
-	response, err := transport.CBOR(ctx, []byte{0x04})
+	response, err := CBOR(ctx, card, []byte{0x04})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -370,12 +358,12 @@ func TestCBORPreservesFinalResponseWhenContextIsCanceledConcurrently(t *testing.
 }
 
 func TestCBORReturnsTypedCTAPError(t *testing.T) {
-	transport, _ := newFakeTransport(t, exchange{
+	card := newSelectedCard(t, exchange{
 		request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 		response: []byte{byte(ctaptransport.CTAP2_ERR_INVALID_CBOR), 0x90, 0x00},
 	})
 
-	_, err := transport.CBOR(context.Background(), []byte{0x04})
+	_, err := CBOR(context.Background(), card, []byte{0x04})
 
 	var ctapErr *ctaptransport.CTAPError
 	if err := err; !errors.As(err, &ctapErr) {
@@ -390,12 +378,12 @@ func TestCBORReturnsTypedCTAPError(t *testing.T) {
 }
 
 func TestCBORReturnsTypedAPDUError(t *testing.T) {
-	transport, _ := newFakeTransport(t, exchange{
+	card := newSelectedCard(t, exchange{
 		request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 		response: []byte{0x6a, 0x82},
 	})
 
-	_, err := transport.CBOR(context.Background(), []byte{0x04})
+	_, err := CBOR(context.Background(), card, []byte{0x04})
 
 	var apduErr *baseiso7816.APDUError
 	if err := err; !errors.As(err, &apduErr) {
@@ -422,12 +410,12 @@ func TestCBORRejectsMalformedResponses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			transport, _ := newFakeTransport(t, exchange{
+			card := newSelectedCard(t, exchange{
 				request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 				response: tt.response,
 			})
 
-			_, err := transport.CBOR(context.Background(), []byte{0x04})
+			_, err := CBOR(context.Background(), card, []byte{0x04})
 
 			if err, target := err, baseiso7816.ErrInvalidResponse; !errors.Is(err, target) {
 				t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
@@ -438,36 +426,30 @@ func TestCBORRejectsMalformedResponses(t *testing.T) {
 
 func TestCBORRejectsUnexpectedIntermediateData(t *testing.T) {
 	command := append([]byte{0x01}, bytes.Repeat([]byte{0xaa}, shortCommandFragmentSize)...)
-	transport, _ := newFakeTransport(t, exchange{
-		request: slicesConcat(
+	card := newSelectedCard(t, exchange{
+		request: slices.Concat(
 			[]byte{0x90, 0x10, 0x00, 0x00, 0xf0},
 			command[:shortCommandFragmentSize],
 		),
 		response: []byte{0x01, 0x90, 0x00},
 	})
 
-	_, err := transport.CBOR(context.Background(), command)
+	_, err := CBOR(context.Background(), card, command)
 
 	if err, target := err, baseiso7816.ErrInvalidResponse; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
 }
 
-func TestCBORValidatesCommandBeforeIO(t *testing.T) {
-	transport, card := newFakeTransport(t)
+func TestCBORRejectsOversizedCommandBeforeIO(t *testing.T) {
+	card := newSelectedCard(t)
 
-	_, emptyErr := transport.CBOR(context.Background(), nil)
-	_, largeErr := transport.CBOR(
+	_, largeErr := CBOR(
 		context.Background(),
+		card,
 		make([]byte, maxMessageSize+1),
 	)
 
-	{
-		err, want := emptyErr, "iso7816: empty CTAP command"
-		if err == nil || err.Error() != want {
-			t.Fatalf("got error %v, want %q", err, want)
-		}
-	}
 	if err, target := largeErr, ErrCommandTooLarge; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
@@ -476,14 +458,14 @@ func TestCBORValidatesCommandBeforeIO(t *testing.T) {
 	}
 }
 
-func TestNewPropagatesTransmitError(t *testing.T) {
+func TestSelectPropagatesTransmitError(t *testing.T) {
 	wantErr := errors.New("transmit failed")
 	card := &fakeCard{t: t, exchanges: []exchange{{
 		request: commandBytes(t, selectAppletCommand),
 		err:     wantErr,
 	}}}
 
-	_, err := New(context.Background(), card)
+	_, err := Select(t.Context(), card)
 
 	if err, target := err, wantErr; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
@@ -496,33 +478,22 @@ func TestNewPropagatesTransmitError(t *testing.T) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
 	_, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err)
-	if got := invalidated; got {
-		t.Errorf("got true, want false")
+	if !invalidated {
+		t.Error("transmit failure did not invalidate the card")
 	}
-	if got := card.closed; got {
-		t.Errorf("got true, want false; context: %s", "the caller retains ownership when initialization fails")
-	}
-}
-
-func TestNewRejectsNilCard(t *testing.T) {
-	_, err := New(context.Background(), nil)
-
-	{
-		err, want := err, "iso7816: nil card"
-		if err == nil || err.Error() != want {
-			t.Fatalf("got error %v, want %q", err, want)
-		}
+	if card.closeCalls != 0 {
+		t.Error("Select closed the borrowed card")
 	}
 }
 
-func TestCBORClosesCardAfterTransmitFailure(t *testing.T) {
+func TestCBORInvalidatesTransportWithoutClosingCardAfterTransmitFailure(t *testing.T) {
 	wantErr := errors.New("transmit failed")
-	transport, card := newFakeTransport(t, exchange{
+	card := newSelectedCard(t, exchange{
 		request: []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 		err:     wantErr,
 	})
 
-	_, err := transport.CBOR(context.Background(), []byte{0x04})
+	_, err := CBOR(context.Background(), card, []byte{0x04})
 
 	if err, target := err, wantErr; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
@@ -538,42 +509,33 @@ func TestCBORClosesCardAfterTransmitFailure(t *testing.T) {
 	if got := invalidated; !got {
 		t.Fatalf("got false, want true")
 	}
-	if got := card.closed; !got {
-		t.Errorf("got false, want true")
-	}
-	if got, want := card.closeCalls, 1; got != want {
-		t.Errorf("got %#v, want %#v", got, want)
-	}
 }
 
-func TestCBORDoesNotCloseCardForOwnContextCancellation(t *testing.T) {
+func TestCBORInvalidatesAfterTransmitCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	transport, card := newFakeTransport(t, exchange{
+	card := newSelectedCard(t, exchange{
 		request: []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
 		err:     context.Canceled,
 		after:   cancel,
 	})
 
-	_, err := transport.CBOR(ctx, []byte{0x04})
+	_, err := CBOR(ctx, card, []byte{0x04})
 
 	if err, target := err, context.Canceled; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
 	_, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err)
-	if got := invalidated; got {
-		t.Errorf("got true, want false")
-	}
-	if got := card.closed; got {
-		t.Errorf("got true, want false")
+	if !invalidated {
+		t.Error("canceled transmit did not invalidate the card")
 	}
 }
 
-func TestNewPreCanceledDoesNotTransmit(t *testing.T) {
+func TestSelectPreCanceledDoesNotTransmit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	card := &fakeCard{t: t}
 
-	_, err := New(ctx, card)
+	_, err := Select(ctx, card)
 
 	if err, target := err, context.Canceled; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
@@ -583,144 +545,222 @@ func TestNewPreCanceledDoesNotTransmit(t *testing.T) {
 	}
 }
 
-func TestCloseEndsSessionAndClosesCardOnce(t *testing.T) {
-	transport, card := newFakeTransport(t, exchange{
-		request:  commandBytes(t, endSessionCommand),
-		response: []byte{0x90, 0x00},
+func TestSelectOnceForMultipleCBOR(t *testing.T) {
+	card := newSelectedCard(t,
+		exchange{request: []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00}, response: []byte{0x00, 0xa0, 0x90, 0x00}},
+		exchange{request: []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00}, response: []byte{0x00, 0xa0, 0x90, 0x00}},
+		exchange{request: commandBytes(t, deselectAppletCommand), response: []byte{0x90, 0x00}},
+	)
+	for range 2 {
+		if _, err := CBOR(t.Context(), card, []byte{0x04}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := Deselect(t.Context(), card); err != nil {
+		t.Fatal(err)
+	}
+	if len(card.exchanges) != 0 {
+		t.Fatalf("remaining APDUs: %v", card.exchanges)
+	}
+}
+
+func TestSelectSelectionErrorsLeaveCardOpen(t *testing.T) {
+	for _, response := range [][]byte{{0x6a, 0x82}, {0x90}} {
+		card := &fakeCard{t: t, exchanges: []exchange{{
+			request: commandBytes(t, selectAppletCommand), response: response,
+		}}}
+		if _, err := Select(t.Context(), card); err == nil {
+			t.Fatal("expected selection error")
+		}
+		if card.closeCalls != 0 {
+			t.Fatal("failed initialization closed borrowed card")
+		}
+	}
+}
+
+func TestSelectCancellationLeavesCardOpen(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	card := &fakeCard{t: t, exchanges: []exchange{{
+		request: commandBytes(t, selectAppletCommand), err: context.Canceled, after: cancel,
+	}}}
+	if _, err := Select(ctx, card); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Select = %v, want context cancellation", err)
+	}
+	if card.closeCalls != 0 {
+		t.Fatal("canceled initialization closed borrowed card")
+	}
+}
+
+func TestDeselectPreservesErrorsAndLeavesCardOpen(t *testing.T) {
+	tests := []struct {
+		name        string
+		response    []byte
+		err         error
+		wantErr     error
+		wantAPDU    bool
+		invalidated bool
+	}{
+		{name: "success", response: []byte{0x90, 0x00}},
+		{name: "rejected", response: []byte{0x6a, 0x86}, wantAPDU: true},
+		{name: "malformed", response: []byte{0x90}, wantErr: baseiso7816.ErrInvalidResponse},
+		{name: "I/O failure", err: io.ErrClosedPipe, wantErr: io.ErrClosedPipe, invalidated: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			card := newSelectedCard(t, exchange{
+				request: commandBytes(t, deselectAppletCommand), response: test.response, err: test.err,
+			})
+			err := Deselect(t.Context(), card)
+			if !errors.Is(err, test.wantErr) && !test.wantAPDU {
+				t.Fatalf("Deselect = %v, want %v", err, test.wantErr)
+			}
+			if test.wantAPDU {
+				apduErr, ok := errors.AsType[*baseiso7816.APDUError](err)
+				if !ok || apduErr.SW1 != 0x6a || apduErr.SW2 != 0x86 {
+					t.Fatalf("Deselect = %v, want status 6a86", err)
+				}
+			}
+			if _, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err); invalidated != test.invalidated {
+				t.Fatalf("Deselect invalidation = %v, want %v", invalidated, test.invalidated)
+			}
+			if len(card.exchanges) != 0 {
+				t.Fatal("END was not transmitted")
+			}
+		})
+	}
+}
+
+func TestDeselectCancellationLeavesCardOpen(t *testing.T) {
+	for _, preCanceled := range []bool{false, true} {
+		ctx, cancel := context.WithCancel(t.Context())
+		card := newSelectedCard(t, exchange{
+			request: commandBytes(t, deselectAppletCommand), err: context.Canceled, after: cancel,
+		})
+		if preCanceled {
+			cancel()
+		}
+		err := Deselect(ctx, card)
+		cancel()
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Deselect = %v, want context cancellation", err)
+		}
+		if _, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err); invalidated == preCanceled {
+			t.Fatalf("preCanceled = %v, invalidation = %v", preCanceled, invalidated)
+		}
+		if preCanceled && len(card.exchanges) != 1 {
+			t.Fatal("pre-canceled END transmitted an APDU")
+		}
+	}
+}
+
+func TestCBORCancellationDuringPolling(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	card := newSelectedCard(t,
+		exchange{request: []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00}, response: []byte{0x02, 0x91, 0x00}},
+		exchange{request: commandBytes(t, getResponseCommand), err: context.Canceled, after: cancel},
+		exchange{request: commandBytes(t, cancelGetResponseCommand), response: []byte{byte(ctaptransport.CTAP2_ERR_KEEPALIVE_CANCEL), 0x90, 0x00}},
+	)
+	_, err := CBOR(ctx, card, []byte{0x04})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("CBOR = %v, want context cancellation", err)
+	}
+	if _, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err); invalidated {
+		t.Fatalf("successful protocol cancellation invalidated transport: %v", err)
+	}
+	if len(card.exchanges) != 0 {
+		t.Fatal("protocol cancellation was not transmitted")
+	}
+}
+
+func TestCBORCancellationBetweenCommandFragmentsInvalidates(t *testing.T) {
+	for _, size := range []int{241, 481} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			data := bytes.Repeat([]byte{0xaa}, size)
+			data[0] = byte(protocol.AuthenticatorMakeCredential)
+			card := newSelectedCard(t, exchange{
+				request:  append([]byte{0x90, 0x10, 0x00, 0x00, 0xf0}, data[:240]...),
+				response: []byte{0x90, 0x00},
+				after:    cancel,
+			})
+
+			_, err := CBOR(ctx, card, data)
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("CBOR = %v, want context cancellation", err)
+			}
+			if _, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err); !invalidated {
+				t.Fatal("partially transmitted command did not invalidate the card")
+			}
+			if len(card.exchanges) != 0 {
+				t.Fatal("first command fragment was not transmitted")
+			}
+		})
+	}
+}
+
+func TestCBORCancellationBetweenResponseFragmentsInvalidates(t *testing.T) {
+	for _, sw1 := range []byte{0x61, 0x9f} {
+		t.Run(fmt.Sprintf("%x", sw1), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			card := newSelectedCard(t, exchange{
+				request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
+				response: []byte{0x00, sw1, 0x01},
+				after:    cancel,
+			})
+
+			_, err := CBOR(ctx, card, []byte{0x04})
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("CBOR = %v, want context cancellation", err)
+			}
+			if _, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err); !invalidated {
+				t.Fatal("partially received response did not invalidate the card")
+			}
+		})
+	}
+}
+
+func TestCBORPreCanceledKeepsCardUsable(t *testing.T) {
+	card := newSelectedCard(t, exchange{
+		request:  []byte{0x80, 0x10, 0x80, 0x00, 0x01, 0x04, 0x00},
+		response: []byte{0x00, 0xa0, 0x90, 0x00},
 	})
-
-	if err := transport.Close(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err := CBOR(ctx, card, []byte{0x04})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("CBOR = %v, want context cancellation", err)
 	}
-	if err := transport.Close(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if _, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err); invalidated {
+		t.Fatal("pre-canceled command invalidated the card")
 	}
-
-	if got := card.closed; !got {
-		t.Errorf("got false, want true")
+	if len(card.exchanges) != 1 {
+		t.Fatal("pre-canceled command transmitted an APDU")
 	}
-	if got, want := card.closeCalls, 1; got != want {
-		t.Errorf("got %#v, want %#v", got, want)
-	}
-	if got := card.exchanges; len(got) != 0 {
-		t.Fatalf("got non-empty value %#v", got)
+	if _, err := CBOR(t.Context(), card, []byte{0x04}); err != nil {
+		t.Fatalf("next CBOR = %v", err)
 	}
 }
 
-func TestCloseReturnsTypedIOError(t *testing.T) {
-	transport, card := newFakeTransport(t, exchange{
-		request:  commandBytes(t, endSessionCommand),
-		response: []byte{0x90, 0x00},
-	})
-	wantErr := errors.New("reader unavailable")
-	card.closeErr = wantErr
-
-	err := transport.Close()
-
-	if err, target := err, wantErr; !errors.Is(err, target) {
-		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
+func TestSelectCancellationBetweenResponseFragmentsInvalidates(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	card := &fakeCard{t: t, exchanges: []exchange{{
+		request:  commandBytes(t, selectAppletCommand),
+		response: append([]byte("FIDO_"), 0x61, 0x03),
+		after:    cancel,
+	}}}
+	_, err := Select(ctx, card)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Select = %v, want context cancellation", err)
 	}
-	var ioErr *ctaptransport.IOError
-	if err := err; !errors.As(err, &ioErr) {
-		t.Fatalf("error %v does not match requested type", err)
+	if _, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err); !invalidated {
+		t.Fatal("partially received SELECT response did not invalidate the card")
 	}
-	if got, want := ioErr.Operation, ctaptransport.IOClose; got != want {
-		t.Errorf("got %#v, want %#v", got, want)
+	if card.closeCalls != 0 {
+		t.Fatal("Select closed the borrowed card")
 	}
-}
-
-func TestCloseClosesCardWhenEndSessionIsRejected(t *testing.T) {
-	transport, card := newFakeTransport(t, exchange{
-		request:  commandBytes(t, endSessionCommand),
-		response: []byte{0x6a, 0x86},
-	})
-
-	err := transport.Close()
-
-	var apduErr *baseiso7816.APDUError
-	if err := err; !errors.As(err, &apduErr) {
-		t.Fatalf("error %v does not match requested type", err)
-	}
-	if got, want := apduErr.SW1, byte(0x6a); got != want {
-		t.Errorf("got %#v, want %#v", got, want)
-	}
-	if got, want := apduErr.SW2, byte(0x86); got != want {
-		t.Errorf("got %#v, want %#v", got, want)
-	}
-	if got := card.closed; !got {
-		t.Errorf("got false, want true")
-	}
-	if got, want := card.closeCalls, 1; got != want {
-		t.Errorf("got %#v, want %#v", got, want)
-	}
-	if got := card.exchanges; len(got) != 0 {
-		t.Fatalf("got non-empty value %#v", got)
-	}
-}
-
-func TestCloseInterruptsBlockedTransmit(t *testing.T) {
-	card := newBlockingCard()
-	transport := &Transport{card: ioCard{Card: card}}
-	resultc := make(chan error, 1)
-	go func() {
-		_, err := transport.CBOR(context.Background(), []byte{0x04})
-		resultc <- err
-	}()
-
-	receive(t, card.started, "card transmit did not start")
-	if err := transport.Close(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	err := receive(t, resultc, "blocked transmit did not stop after close")
-
-	if err, target := err, io.ErrClosedPipe; !errors.Is(err, target) {
-		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
-	}
-	var ioErr *ctaptransport.IOError
-	if err := err; !errors.As(err, &ioErr) {
-		t.Fatalf("error %v does not match requested type", err)
-	}
-	if got, want := ioErr.Operation, ctaptransport.IOTransmit; got != want {
-		t.Errorf("got %#v, want %#v", got, want)
-	}
-	_, invalidated := errors.AsType[*ctaptransport.DeviceInvalidatedError](err)
-	if got := invalidated; !got {
-		t.Fatalf("got false, want true")
-	}
-}
-
-type blockingCard struct {
-	started chan struct{}
-	closed  chan struct{}
-	once    sync.Once
-}
-
-func newBlockingCard() *blockingCard {
-	return &blockingCard{
-		started: make(chan struct{}),
-		closed:  make(chan struct{}),
-	}
-}
-
-func (c *blockingCard) Transmit(ctx context.Context, _ []byte) ([]byte, error) {
-	c.once.Do(func() { close(c.started) })
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-c.closed:
-		return nil, io.ErrClosedPipe
-	}
-}
-
-func (c *blockingCard) Close() error {
-	close(c.closed)
-	return nil
-}
-
-func slicesConcat(slices ...[]byte) []byte {
-	var result []byte
-	for _, slice := range slices {
-		result = append(result, slice...)
-	}
-	return result
 }
