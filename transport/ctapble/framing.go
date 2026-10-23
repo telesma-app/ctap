@@ -60,6 +60,7 @@ func (a *responseFrameAssembler) addFragment(fragment []byte) (*responseFrame, e
 	if fragment[0]&initializationFragmentBit != 0 {
 		return a.initializationFragment(fragment)
 	}
+
 	return a.continuationFragment(fragment)
 }
 
@@ -67,17 +68,21 @@ func (a *responseFrameAssembler) initializationFragment(fragment []byte) (*respo
 	if a.assembling {
 		return nil, errors.Join(ErrInvalidFrame, errors.New("initialization fragment interrupted frame"))
 	}
+
 	if len(fragment) < initializationFragmentHeaderLength {
 		return nil, errors.Join(ErrInvalidFrame, errors.New("short initialization fragment"))
 	}
 
 	a.status = Command(fragment[0])
+
 	a.dataLength = int(binary.BigEndian.Uint16(fragment[1:initializationFragmentHeaderLength]))
 	if len(fragment)-initializationFragmentHeaderLength > a.dataLength {
 		return nil, errors.Join(ErrInvalidFrame, errors.New("initialization fragment exceeds declared data length"))
 	}
+
 	a.data = fragment[initializationFragmentHeaderLength:]
 	a.sequence = 0
+
 	a.assembling = len(a.data) != a.dataLength
 	if a.assembling {
 		return nil, nil
@@ -90,25 +95,31 @@ func (a *responseFrameAssembler) continuationFragment(fragment []byte) (*respons
 	if !a.assembling {
 		return nil, errors.Join(ErrInvalidFrame, errors.New("continuation fragment without initialization fragment"))
 	}
+
 	if fragment[0] != a.sequence {
 		return nil, fmt.Errorf("%w: sequence 0x%02x, want 0x%02x", ErrInvalidFrame, fragment[0], a.sequence)
 	}
+
 	if len(a.data)+len(fragment)-continuationFragmentHeaderLength > a.dataLength {
 		return nil, errors.Join(ErrInvalidFrame, errors.New("continuation fragment exceeds declared data length"))
 	}
 
 	a.data = append(a.data, fragment[continuationFragmentHeaderLength:]...)
+
 	a.sequence = (a.sequence + 1) & maximumSequence
 	if len(a.data) != a.dataLength {
 		return nil, nil
 	}
+
 	a.assembling = false
+
 	return a.completeFrame(), nil
 }
 
 func (a *responseFrameAssembler) completeFrame() *responseFrame {
 	result := &responseFrame{status: a.status, data: a.data}
 	a.data = nil
+
 	return result
 }
 
@@ -116,5 +127,6 @@ func decodeErrorCode(data []byte) (ErrorCode, error) {
 	if len(data) != 1 {
 		return 0, errors.Join(ErrInvalidFrame, errors.New("invalid encapsulation error length"))
 	}
+
 	return ErrorCode(data[0]), nil
 }

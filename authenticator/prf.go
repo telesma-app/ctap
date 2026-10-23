@@ -26,14 +26,16 @@ func validateCreatePRF(
 	if inputs.PRFInputs == nil {
 		return nil, nil
 	}
+
 	if inputs.PRF.EvalByCredential != nil {
-		return nil, newErrorMessage(ErrNotSupported, "evalByCredential is not supported during registration")
+		return nil, &ErrorWithMessage{Err: ErrNotSupported, Message: "evalByCredential is not supported during registration"}
 	}
 
 	evalPresent, err := validateOptionalPRFValues("eval", inputs.PRF.Eval)
 	if err != nil {
 		return nil, err
 	}
+
 	supportsHMACSecret, supportsHMACSecretMC, err := prfCapabilities(info)
 	if err != nil {
 		return nil, err
@@ -70,13 +72,16 @@ func validateGetPRF(
 	if err != nil {
 		return nil, err
 	}
+
 	supportsHMACSecret, _, err := prfCapabilities(info)
 	if err != nil {
 		return nil, err
 	}
+
 	if evaluation == nil || !supportsHMACSecret {
 		return nil, nil
 	}
+
 	if err := validateHMACSecretUserPresence(options); err != nil {
 		return nil, err
 	}
@@ -108,12 +113,10 @@ func prfCapabilities(info protocol.AuthenticatorGetInfoResponse) (bool, bool, er
 	// advertised.
 	// https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#sctn-hmac-secret-make-cred-extension
 	supportsHMACSecret := slices.Contains(info.Extensions, extension.ExtensionIdentifierHMACSecret)
+
 	supportsHMACSecretMC := slices.Contains(info.Extensions, extension.ExtensionIdentifierHMACSecretMC)
 	if supportsHMACSecretMC && !supportsHMACSecret {
-		return false, false, newErrorMessage(
-			ErrSpecViolation,
-			"device reports hmac-secret-mc without dependent hmac-secret extension",
-		)
+		return false, false, &ErrorWithMessage{Err: ErrSpecViolation, Message: "device reports hmac-secret-mc without dependent hmac-secret extension"}
 	}
 
 	return supportsHMACSecret, supportsHMACSecretMC, nil
@@ -127,8 +130,9 @@ func validateOptionalPRFValues(name string, values webauthn.AuthenticationExtens
 	if values.First != nil {
 		return true, nil
 	}
+
 	if values.Second != nil {
-		return false, newErrorMessage(SyntaxError, fmt.Sprintf("%s.second requires %s.first", name, name))
+		return false, &ErrorWithMessage{Err: SyntaxError, Message: fmt.Sprintf("%s.second requires %s.first", name, name)}
 	}
 
 	return false, nil
@@ -138,7 +142,7 @@ func validateRequiredPRFValues(name string, values webauthn.AuthenticationExtens
 	// WebAuthn L3 CR § 10.1.4 (AuthenticationExtensionsPRFValues.first):
 	// https://www.w3.org/TR/2026/CR-webauthn-3-20260526/#prf-extension
 	if values.First == nil {
-		return newErrorMessage(SyntaxError, fmt.Sprintf("%s.first is required", name))
+		return &ErrorWithMessage{Err: SyntaxError, Message: fmt.Sprintf("%s.first is required", name)}
 	}
 
 	return nil
@@ -153,25 +157,30 @@ func validateGetPRFInputs(
 	if _, err := validateOptionalPRFValues("eval", inputs.Eval); err != nil {
 		return err
 	}
+
 	if len(inputs.EvalByCredential) == 0 {
 		return nil
 	}
+
 	if len(allowList) == 0 {
-		return newErrorMessage(ErrNotSupported, "non-empty evalByCredential requires a non-empty allowList")
+		return &ErrorWithMessage{Err: ErrNotSupported, Message: "non-empty evalByCredential requires a non-empty allowList"}
 	}
 
 	allowedCredentialIDs := make(map[string]struct{}, len(allowList))
 	for _, descriptor := range allowList {
 		allowedCredentialIDs[base64.RawURLEncoding.EncodeToString(descriptor.ID)] = struct{}{}
 	}
+
 	for encodedID, values := range inputs.EvalByCredential {
 		credentialID, err := base64.RawURLEncoding.Strict().DecodeString(encodedID)
 		if encodedID == "" || err != nil || base64.RawURLEncoding.EncodeToString(credentialID) != encodedID {
-			return newErrorMessage(SyntaxError, "evalByCredential contains an invalid base64url credential ID")
+			return &ErrorWithMessage{Err: SyntaxError, Message: "evalByCredential contains an invalid base64url credential ID"}
 		}
+
 		if _, ok := allowedCredentialIDs[encodedID]; !ok {
-			return newErrorMessage(SyntaxError, "evalByCredential credential ID is not present in allowList")
+			return &ErrorWithMessage{Err: SyntaxError, Message: "evalByCredential credential ID is not present in allowList"}
 		}
+
 		if err := validateRequiredPRFValues("evalByCredential", values); err != nil {
 			return err
 		}
@@ -188,6 +197,7 @@ func selectPRFEvaluationForCredential(
 	if values, ok := inputs.EvalByCredential[encodedID]; ok {
 		return new(values)
 	}
+
 	if inputs.Eval.First != nil {
 		return new(inputs.Eval)
 	}
@@ -202,6 +212,7 @@ func selectCTAPGetPRFEvaluation(
 	if err := validateGetPRFInputs(inputs, allowList); err != nil {
 		return nil, err
 	}
+
 	if len(inputs.EvalByCredential) == 0 {
 		return selectPRFEvaluationForCredential(inputs, nil), nil
 	}
@@ -217,12 +228,14 @@ func selectCTAPGetPRFEvaluation(
 		reference    *webauthn.AuthenticationExtensionsPRFValues
 		referenceSet bool
 	)
+
 	seenCredentialIDs := make(map[string]struct{}, len(allowList))
 	for _, descriptor := range allowList {
 		encodedID := base64.RawURLEncoding.EncodeToString(descriptor.ID)
 		if _, seen := seenCredentialIDs[encodedID]; seen {
 			continue
 		}
+
 		seenCredentialIDs[encodedID] = struct{}{}
 
 		effective := selectPRFEvaluationForCredential(inputs, descriptor.ID)
@@ -230,13 +243,12 @@ func selectCTAPGetPRFEvaluation(
 		if !referenceSet {
 			reference = effective
 			referenceSet = true
+
 			continue
 		}
+
 		if !equalOptionalPRFValues(reference, effective) {
-			return nil, newErrorMessage(
-				ErrNotSupported,
-				"Device.GetAssertion cannot apply different credential-specific PRF inputs in one CTAP request; issue one request per credential",
-			)
+			return nil, &ErrorWithMessage{Err: ErrNotSupported, Message: "Device.GetAssertion cannot apply different credential-specific PRF inputs in one CTAP request; issue one request per credential"}
 		}
 	}
 
@@ -264,19 +276,18 @@ func prfUserVerificationRequiredError(info protocol.AuthenticatorGetInfoResponse
 	// explicitly supply instead of performing that override itself.
 	// https://www.w3.org/TR/2026/CR-webauthn-3-20260526/#prf-extension
 	if info.Options[protocol.OptionUserVerification] {
-		return newErrorMessage(
-			ErrBuiltInUVRequired,
-			"PRF evaluation requires options[uv]=true or a pinUvAuthToken",
-		)
-	}
-	if info.Options[protocol.OptionClientPIN] && !info.Options[protocol.OptionNoMcGaPermissionsWithClientPin] {
-		return newErrorMessage(ErrPinUvAuthTokenRequired, "PRF evaluation requires user verification")
-	}
-	if configured, ok := info.Options[protocol.OptionUserVerification]; ok && !configured {
-		return newErrorMessage(ErrUvNotConfigured, "PRF evaluation requires configured user verification")
+		return &ErrorWithMessage{Err: ErrBuiltInUVRequired, Message: "PRF evaluation requires options[uv]=true or a pinUvAuthToken"}
 	}
 
-	return newErrorMessage(ErrNotSupported, "device cannot perform the user verification required for PRF evaluation")
+	if info.Options[protocol.OptionClientPIN] && !info.Options[protocol.OptionNoMcGaPermissionsWithClientPin] {
+		return &ErrorWithMessage{Err: ErrPinUvAuthTokenRequired, Message: "PRF evaluation requires user verification"}
+	}
+
+	if configured, ok := info.Options[protocol.OptionUserVerification]; ok && !configured {
+		return &ErrorWithMessage{Err: ErrUvNotConfigured, Message: "PRF evaluation requires configured user verification"}
+	}
+
+	return &ErrorWithMessage{Err: ErrNotSupported, Message: "device cannot perform the user verification required for PRF evaluation"}
 }
 
 func prfSalts(values webauthn.AuthenticationExtensionsPRFValues) []byte {
@@ -299,11 +310,9 @@ func validatePRFResultLength(values webauthn.AuthenticationExtensionsPRFValues, 
 	if values.Second != nil {
 		want = 64
 	}
+
 	if len(result) != want {
-		return newErrorMessage(
-			ErrSpecViolation,
-			fmt.Sprintf("device returned %d PRF result bytes, want %d", len(result), want),
-		)
+		return &ErrorWithMessage{Err: ErrSpecViolation, Message: fmt.Sprintf("device returned %d PRF result bytes, want %d", len(result), want)}
 	}
 
 	return nil
@@ -317,5 +326,6 @@ func hashPRFInput(input []byte) []byte {
 	hasher.Write([]byte("WebAuthn PRF"))
 	hasher.Write([]byte{0x00})
 	hasher.Write(input)
+
 	return hasher.Sum(nil)
 }

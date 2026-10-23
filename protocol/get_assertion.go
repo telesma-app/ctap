@@ -66,6 +66,7 @@ func ParseGetAssertionAuthData(data []byte) (GetAssertionAuthData, error) {
 			Decode(&extensions); err != nil {
 			return GetAssertionAuthData{}, err
 		}
+
 		getAssertionAuthData.Extensions = &extensions
 	}
 

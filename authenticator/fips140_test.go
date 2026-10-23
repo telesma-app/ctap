@@ -27,6 +27,7 @@ func TestFIPS140AuthenticatorSelectsPinUvAuthProtocolTwo(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if want := protocol.PinUvAuthProtocolTwo; got != want {
 			t.Fatalf("protocol = %#v, want %#v", got, want)
 		}
@@ -61,6 +62,7 @@ func TestFIPS140AuthenticatorGetUVRetriesUsesProtocolTwo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := retries, uint(5); got != want {
 		t.Fatalf("retries = %d, want %d", got, want)
 	}
@@ -69,6 +71,7 @@ func TestFIPS140AuthenticatorGetUVRetriesUsesProtocolTwo(t *testing.T) {
 	if got, want := command, protocol.AuthenticatorClientPIN; got != want {
 		t.Fatalf("command = %#v, want %#v", got, want)
 	}
+
 	got, ok := request[uint64(1)].(uint64)
 	if !ok || got != uint64(protocol.PinUvAuthProtocolTwo) {
 		t.Fatalf("pinUvAuthProtocol = %#v, want %#v", request[uint64(1)], protocol.PinUvAuthProtocolTwo)
@@ -115,11 +118,11 @@ func TestFIPS140AuthenticatorRejectsBeforeIO(t *testing.T) {
 		assertAuthenticatorFIPS140NotAllowed(t, err)
 		assertNoAuthenticatorIO(t, fake)
 	})
-
 }
 
 func requireAuthenticatorFIPS140(t testing.TB) {
 	t.Helper()
+
 	if !cryptofips140.Enabled() {
 		t.Skip("requires Go FIPS 140-3 mode")
 	}
@@ -127,6 +130,7 @@ func requireAuthenticatorFIPS140(t testing.TB) {
 
 func skipAuthenticatorFIPS140(t testing.TB) {
 	t.Helper()
+
 	if cryptofips140.Enabled() {
 		t.Skip("legacy behavior is not available in Go FIPS 140-3 mode")
 	}
@@ -134,6 +138,7 @@ func skipAuthenticatorFIPS140(t testing.TB) {
 
 func assertAuthenticatorFIPS140NotAllowed(t testing.TB, err error) {
 	t.Helper()
+
 	if !errors.Is(err, ctapfips140.ErrNotAllowed) {
 		t.Fatalf("error = %v, want errors.Is(error, %v)", err, ctapfips140.ErrNotAllowed)
 	}

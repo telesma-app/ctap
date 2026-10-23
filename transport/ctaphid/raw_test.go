@@ -18,6 +18,7 @@ func TestMessagePayloadBoundaries(t *testing.T) {
 	} {
 		t.Run(strconv.Itoa(payloadLen), func(t *testing.T) {
 			payload := bytes.Repeat([]byte{0xa5}, payloadLen)
+
 			message, err := NewMessage(cid, CTAPHID_PING, payload)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -26,12 +27,15 @@ func TestMessagePayloadBoundaries(t *testing.T) {
 			if got, want := message.CID(), cid; got != want {
 				t.Errorf("got %#v, want %#v", got, want)
 			}
+
 			if got, want := message.Command(), CTAPHID_PING; got != want {
 				t.Errorf("got %#v, want %#v", got, want)
 			}
+
 			if got, want := message.DeclaredLength(), uint16(payloadLen); got != want {
 				t.Errorf("got %#v, want %#v", got, want)
 			}
+
 			if got, want := message.Payload(), payload; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 				t.Errorf("got %#v, want %#v", got, want)
 			}
@@ -84,8 +88,9 @@ func TestMessageOutputReportBoundaries(t *testing.T) {
 			if got, want := len(reports), tc.reportCount; got != want {
 				t.Fatalf("got length %d, want %d", got, want)
 			}
+
 			for _, report := range reports {
-				if got := report[0]; !(got == 0) {
+				if got := report[0]; got != 0 {
 					t.Errorf("got %#v, want zero value", got)
 				}
 			}

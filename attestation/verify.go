@@ -63,6 +63,7 @@ func VerifyPacked(
 		}
 
 		var err error
+
 		verification.SignatureValid, err = verifySignature(
 			credentialPublicKey,
 			statement.Algorithm,
@@ -77,10 +78,12 @@ func VerifyPacked(
 		Type:             TypeBasic,
 		CertificateChain: statement.X509Chain,
 	}
+
 	leaf, err := x509.ParseCertificate(statement.X509Chain[0])
 	if err != nil {
 		return verification, fmt.Errorf("%w: parse leaf certificate: %v", ErrStatementMalformed, err)
 	}
+
 	verification.SignatureValid, err = verifySignature(
 		leaf.PublicKey,
 		statement.Algorithm,
@@ -108,10 +111,12 @@ func VerifyFIDOU2F(
 	if len(statement.X509Chain) == 0 {
 		return verification, fmt.Errorf("%w: missing certificate chain", ErrStatementMalformed)
 	}
+
 	key, ok := credentialPublicKey.(*ecdsa.PublicKey)
 	if !ok || credentialAlgorithm != cose.AlgorithmES256 {
 		return verification, fmt.Errorf("%w: FIDO U2F requires an ES256 credential key", ErrStatementMalformed)
 	}
+
 	encodedKey, err := key.Bytes()
 	if err != nil {
 		return verification, fmt.Errorf("%w: %v", ErrCredentialKeyMalformed, err)
@@ -123,10 +128,12 @@ func VerifyFIDOU2F(
 	signedData = append(signedData, clientDataHash...)
 	signedData = append(signedData, credentialID...)
 	signedData = append(signedData, encodedKey...)
+
 	leaf, err := x509.ParseCertificate(statement.X509Chain[0])
 	if err != nil {
 		return verification, fmt.Errorf("%w: parse leaf certificate: %v", ErrStatementMalformed, err)
 	}
+
 	verification.SignatureValid, err = verifySignature(
 		leaf.PublicKey,
 		cose.AlgorithmES256,

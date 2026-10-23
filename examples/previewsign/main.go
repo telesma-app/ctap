@@ -41,10 +41,7 @@ func run(ctx context.Context) error {
 	}
 	defer device.Close()
 
-	info, ok := device.GetInfoCached()
-	if !ok {
-		return errors.New("authenticatorGetInfo response is unavailable")
-	}
+	info, _ := device.GetInfoCached()
 	if !slices.Contains(info.Extensions, extension.ExtensionIdentifierPreviewSign) {
 		return errors.New("authenticator does not support previewSign")
 	}
@@ -95,14 +92,6 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if registration.AuthData == nil || registration.AuthData.AttestedCredentialData == nil {
-		return errors.New("authenticator returned no credential data")
-	}
-	if registration.ExtensionOutputs == nil || registration.ExtensionOutputs.PreviewSignOutputs == nil ||
-		registration.ExtensionOutputs.PreviewSign.GeneratedKey == nil {
-		return errors.New("authenticator returned no previewSign generated key")
-	}
-
 	credentialID := registration.AuthData.AttestedCredentialData.CredentialID
 	generatedKey := registration.ExtensionOutputs.PreviewSign.GeneratedKey
 	fmt.Printf("Credential ID: %s\n", base64.RawURLEncoding.EncodeToString(credentialID))
@@ -188,9 +177,6 @@ func run(ctx context.Context) error {
 	) {
 		if err != nil {
 			return err
-		}
-		if assertion.ExtensionOutputs == nil || assertion.ExtensionOutputs.PreviewSignOutputs == nil {
-			return errors.New("authenticator returned no previewSign signature")
 		}
 		assertionSignature = assertion.ExtensionOutputs.PreviewSign.Signature
 	}

@@ -9,7 +9,7 @@ var (
 	ErrPinUvAuthTokenRequired   = errors.New("device: pinUvAuthToken required")
 	ErrBuiltInUVRequired        = errors.New("device: built-in user verification required")
 	ErrNotSupported             = errors.New("device: not supported")
-	SyntaxError                 = errors.New("device: syntax error")
+	SyntaxError                 = errors.New("device: syntax error") //nolint:staticcheck // Preserve the established public API.
 	ErrBadType                  = errors.New("device: bad type")
 	ErrInvalidSaltSize          = errors.New("device: invalid salt size")
 	ErrPinNotSet                = errors.New("device: pin not set")
@@ -26,17 +26,11 @@ type ErrorWithMessage struct {
 	Err     error
 }
 
-func newErrorMessage(err error, msg string) *ErrorWithMessage {
-	return &ErrorWithMessage{
-		Message: msg,
-		Err:     err,
-	}
-}
-
 func (m *ErrorWithMessage) Error() string {
 	if m.Message != "" {
 		return m.Err.Error() + " (" + m.Message + ")"
 	}
+
 	return m.Err.Error()
 }
 

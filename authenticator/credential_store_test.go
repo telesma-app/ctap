@@ -43,10 +43,12 @@ func TestCredentialStoreMutationsDoNotRequestGetInfo(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		requests := fake.Requests(t)
 		if got, want := len(requests), 1; got != want {
 			t.Fatalf("got length %d, want %d", got, want)
 		}
+
 		command, _ := requests[0].CTAPPayload(t)
 		if got, want := command, protocol.AuthenticatorMakeCredential; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
@@ -71,10 +73,12 @@ func TestCredentialStoreMutationsDoNotRequestGetInfo(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		requests := fake.Requests(t)
 		if got, want := len(requests), 1; got != want {
 			t.Fatalf("got length %d, want %d", got, want)
 		}
+
 		command, _ := requests[0].CTAPPayload(t)
 		if got, want := command, protocol.AuthenticatorCredentialManagement; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
@@ -100,10 +104,12 @@ func TestCredentialStoreMutationsDoNotRequestGetInfo(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		requests := fake.Requests(t)
 		if got, want := len(requests), 1; got != want {
 			t.Fatalf("got length %d, want %d", got, want)
 		}
+
 		command, _ := requests[0].CTAPPayload(t)
 		if got, want := command, protocol.AuthenticatorCredentialManagement; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
@@ -142,13 +148,16 @@ func TestMakeCredentialDoesNotRequestGetInfoAfterSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := result.Format, attestation.AttestationStatementFormatIdentifierPacked; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	requests := fake.Requests(t)
 	if got, want := len(requests), 1; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
 	}
+
 	command, _ := requests[0].CTAPPayload(t)
 	if got, want := command, protocol.AuthenticatorMakeCredential; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
@@ -163,12 +172,15 @@ func TestCredentialManagementUnsupportedIteratorsReturnBeforeCommand(t *testing.
 		var count int
 		for rp, err := range d.EnumerateRPs(testContext, nil) {
 			count++
+
 			if !credentialManagementResponseIsZero(rp) {
 				t.Errorf("got %#v, want zero response", rp)
 			}
+
 			if err == nil {
 				t.Fatalf("expected an error")
 			}
+
 			if got := errors.Is(err, ErrNotSupported); !got {
 				t.Errorf("got false, want true")
 			}
@@ -177,6 +189,7 @@ func TestCredentialManagementUnsupportedIteratorsReturnBeforeCommand(t *testing.
 		if got, want := count, 1; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -187,12 +200,15 @@ func TestCredentialManagementUnsupportedIteratorsReturnBeforeCommand(t *testing.
 		var count int
 		for cred, err := range d.EnumerateCredentials(testContext, nil, make([]byte, 32)) {
 			count++
+
 			if !credentialManagementResponseIsZero(cred) {
 				t.Errorf("got %#v, want zero response", cred)
 			}
+
 			if err == nil {
 				t.Fatalf("expected an error")
 			}
+
 			if got := errors.Is(err, ErrNotSupported); !got {
 				t.Errorf("got false, want true")
 			}
@@ -201,6 +217,7 @@ func TestCredentialManagementUnsupportedIteratorsReturnBeforeCommand(t *testing.
 		if got, want := count, 1; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 }

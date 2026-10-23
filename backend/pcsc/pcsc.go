@@ -24,13 +24,16 @@ func Devices(ctx context.Context) iter.Seq2[*nativepcsc.ReaderInfo, error] {
 				yield(nil, err)
 				return
 			}
+
 			if err != nil {
 				yield(nil, err)
 				return
 			}
+
 			if reader.State&nativepcsc.ReaderStatePresent == 0 {
 				continue
 			}
+
 			if !yield(reader, nil) {
 				return
 			}

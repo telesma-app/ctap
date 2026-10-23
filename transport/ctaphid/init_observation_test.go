@@ -22,12 +22,14 @@ func TestOpenRetainsINITAcrossIndependentSourceReads(t *testing.T) {
 	for _, status := range []transport.StatusCode{transport.CTAP2_OK, transport.CTAP1_ERR_INVALID_COMMAND} {
 		t.Run(status.String(), func(t *testing.T) {
 			dev := newSourceDevice(t, status)
+
 			tr, err := ctaphid.Open(t.Context(), dev)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			init := tr.InitResponse()
+
 			want := ctaphid.InitResponse{
 				Nonce:                            [8]byte(dev.requests[0].Data),
 				CID:                              dev.cid,
@@ -55,23 +57,29 @@ func TestOpenRetainsINITAcrossIndependentSourceReads(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+
 				info, valid := auth.GetInfoCached()
 				if !valid {
 					t.Fatal("authenticator did not retain eager GetInfo")
 				}
+
 				checkGetInfoResult(t, info, nil, status)
+
 				if err := auth.Close(); err != nil {
 					t.Fatal(err)
 				}
 			} else {
 				checkGetInfoResult(t, protocol.AuthenticatorGetInfoResponse{}, err, status)
+
 				if dev.closeCount != 0 {
 					t.Fatal("failed authenticator construction closed the borrowed transport")
 				}
+
 				if err := tr.Close(); err != nil {
 					t.Fatal(err)
 				}
 			}
+
 			if dev.closeCount != 1 {
 				t.Fatalf("Close calls = %d, want 1", dev.closeCount)
 			}
@@ -79,6 +87,7 @@ func TestOpenRetainsINITAcrossIndependentSourceReads(t *testing.T) {
 			wantCommands := []ctaphid.Command{
 				ctaphid.CTAPHID_INIT, ctaphid.CTAPHID_VENDOR_FIRST, ctaphid.CTAPHID_CBOR,
 			}
+
 			var commands []ctaphid.Command
 			for _, request := range dev.requests {
 				commands = append(commands, request.Command)
@@ -86,9 +95,11 @@ func TestOpenRetainsINITAcrossIndependentSourceReads(t *testing.T) {
 					t.Fatalf("unexpected CBOR request: %#v", request)
 				}
 			}
+
 			if !reflect.DeepEqual(commands, wantCommands) {
 				t.Fatalf("commands = %v, want %v", commands, wantCommands)
 			}
+
 			if got := tr.InitResponse(); got != want {
 				t.Fatalf("INIT changed after commands and Close: %#v", got)
 			}
@@ -98,24 +109,30 @@ func TestOpenRetainsINITAcrossIndependentSourceReads(t *testing.T) {
 
 func TestClientGetInfoFailureDoesNotBlockVendor(t *testing.T) {
 	dev := newSourceDevice(t, transport.CTAP1_ERR_INVALID_COMMAND)
+
 	tr, err := ctaphid.Open(t.Context(), dev)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tr.Close()
+	defer func() { _ = tr.Close() }()
+
 	cl, err := client.NewClient(options.WithTransport(tr))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(dev.requests) != 1 {
 		t.Fatal("NewClient performed device I/O")
 	}
+
 	info, err := cl.GetInfo(t.Context())
 	checkGetInfoResult(t, info, err, dev.status)
+
 	vendor, err := tr.Vendor(t.Context(), ctaphid.CTAPHID_VENDOR_FIRST, nil)
 	if err != nil || !bytes.Equal(vendor.Data, []byte{0xa1, 0xb2}) {
 		t.Fatalf("Vendor after GetInfo failure = %#v, %v", vendor, err)
 	}
+
 	if dev.closeCount != 0 {
 		t.Fatal("borrowed transport was closed")
 	}
@@ -123,12 +140,15 @@ func TestClientGetInfoFailureDoesNotBlockVendor(t *testing.T) {
 
 func checkGetInfoResult(t *testing.T, info protocol.AuthenticatorGetInfoResponse, err error, status transport.StatusCode) {
 	t.Helper()
+
 	if status == transport.CTAP2_OK {
 		if err != nil || !reflect.DeepEqual(info.Versions, protocol.Versions{protocol.FIDO_2_0}) {
 			t.Fatalf("GetInfo = %#v, %v", info, err)
 		}
+
 		return
 	}
+
 	var responseErr *transport.CTAPError
 	if !errors.As(err, &responseErr) || responseErr.StatusCode != status {
 		t.Fatalf("GetInfo error = %v, want status %v", err, status)
@@ -157,9 +177,12 @@ func (d *sourceDevice) Write(_ context.Context, p []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	d.requests = append(d.requests, requests...)
 	request := requests[0]
+
 	var data []byte
+
 	switch request.Command {
 	case ctaphid.CTAPHID_INIT:
 		data = append(request.Data, d.cid[:]...)
@@ -171,6 +194,7 @@ func (d *sourceDevice) Write(_ context.Context, p []byte) (int, error) {
 			if err != nil {
 				return 0, err
 			}
+
 			data = append(data, info...)
 		}
 	case ctaphid.CTAPHID_VENDOR_FIRST:
@@ -178,15 +202,19 @@ func (d *sourceDevice) Write(_ context.Context, p []byte) (int, error) {
 	default:
 		d.t.Errorf("unexpected command: %v", request.Command)
 	}
+
 	msg, err := ctaphid.NewMessage(request.CID, request.Command, data)
 	if err != nil {
 		return 0, err
 	}
+
 	var encoded bytes.Buffer
 	if _, err := msg.WriteTo(&encoded); err != nil {
 		return 0, err
 	}
+
 	d.responses <- encoded.Bytes()[1:]
+
 	return len(p), nil
 }
 
@@ -204,5 +232,6 @@ func (d *sourceDevice) Read(ctx context.Context, p []byte) (int, error) {
 func (d *sourceDevice) Close() error {
 	d.closeCount++
 	close(d.closed)
+
 	return nil
 }

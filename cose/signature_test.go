@@ -22,14 +22,17 @@ func TestCredentialKeyAndSignatureAlgorithms(t *testing.T) {
 	p256 := generateECDSAKey(t, elliptic.P256())
 	p384 := generateECDSAKey(t, elliptic.P384())
 	p521 := generateECDSAKey(t, elliptic.P521())
+
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generate RSA key: %v", err)
 	}
+
 	_, ed25519Key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate Ed25519 key: %v", err)
 	}
+
 	var (
 		ed448Key     ed448.PrivateKey
 		secp256k1Key *secp256k1.PrivateKey
@@ -39,6 +42,7 @@ func TestCredentialKeyAndSignatureAlgorithms(t *testing.T) {
 		if err != nil {
 			t.Fatalf("generate Ed448 key: %v", err)
 		}
+
 		secp256k1Key, err = secp256k1.GeneratePrivateKey()
 		if err != nil {
 			t.Fatalf("generate secp256k1 key: %v", err)
@@ -75,6 +79,7 @@ func TestCredentialKeyAndSignatureAlgorithms(t *testing.T) {
 			if fips140.Enabled() && test.fipsBlock {
 				t.Skip("algorithm is intentionally unavailable in FIPS 140-3 mode")
 			}
+
 			message := []byte("credential signature message")
 			key := credentialKey(test.key, test.algorithm)
 			key[2] = []byte("optional key ID")
@@ -83,19 +88,23 @@ func TestCredentialKeyAndSignatureAlgorithms(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read algorithm: %v", err)
 			}
+
 			if algorithm != test.algorithm {
 				t.Fatalf("algorithm = %d, want %d", algorithm, test.algorithm)
 			}
+
 			publicKey, err := key.PublicKey()
 			if err != nil {
 				t.Fatalf("convert public key: %v", err)
 			}
+
 			signature := signTestMessage(t, test.key, test.algorithm, message)
 			if err := VerifySignature(publicKey, test.algorithm, message, signature); err != nil {
 				t.Fatalf("verify signature: %v", err)
 			}
 
 			corrupt := append([]byte(nil), signature...)
+
 			corrupt[len(corrupt)-1] ^= 0x01
 			if err := VerifySignature(publicKey, test.algorithm, message, corrupt); !errors.Is(err, ErrInvalidSignature) {
 				t.Fatalf("corrupt signature error = %v, want %v", err, ErrInvalidSignature)
@@ -116,6 +125,7 @@ func TestVerifySignatureRejectsUnsupportedAndMismatchedAlgorithms(t *testing.T) 
 	) {
 		t.Fatalf("curve mismatch error = %v, want %v", err, ErrKeyAlgorithmMismatch)
 	}
+
 	if err := VerifySignature(&p256.PublicKey, Algorithm(12345), message, signature); !errors.Is(
 		err,
 		ErrUnsupportedAlgorithm,
@@ -191,6 +201,7 @@ func TestCredentialPublicKeyValidation(t *testing.T) {
 			if err == nil {
 				t.Fatal("PublicKey succeeded")
 			}
+
 			if test.want != nil && !errors.Is(err, test.want) {
 				t.Fatalf("PublicKey error = %v, want %v", err, test.want)
 			}
@@ -207,11 +218,14 @@ func credentialKey(key any, algorithm Algorithm) Key {
 	switch key := key.(type) {
 	case *ecdsa.PrivateKey:
 		size := (key.Curve.Params().BitSize + 7) / 8
+
 		encoded, err := key.PublicKey.Bytes()
 		if err != nil {
 			panic(err)
 		}
+
 		curve := EllipticCurveP256
+
 		switch key.Curve {
 		case elliptic.P384():
 			curve = EllipticCurveP384
@@ -242,6 +256,7 @@ func credentialKey(key any, algorithm Algorithm) Key {
 		}
 	case *secp256k1.PrivateKey:
 		encoded := key.PubKey().SerializeUncompressed()
+
 		return Key{
 			KeyParameterKty:    KeyTypeEC2,
 			KeyParameterAlg:    algorithm,
@@ -265,6 +280,7 @@ func signTestMessage(t *testing.T, key any, algorithm Algorithm, message []byte)
 	t.Helper()
 
 	var hash crypto.Hash
+
 	switch algorithm {
 	case AlgorithmES256, AlgorithmESP256, AlgorithmES256K, AlgorithmRS256, AlgorithmPS256:
 		hash = crypto.SHA256
@@ -290,6 +306,7 @@ func signTestMessage(t *testing.T, key any, algorithm Algorithm, message []byte)
 	hasher := hash.New()
 	_, _ = hasher.Write(message)
 	digest := hasher.Sum(nil)
+
 	switch key := key.(type) {
 	case *ecdsa.PrivateKey:
 		signature, err := ecdsa.SignASN1(rand.Reader, key, digest)
@@ -312,6 +329,7 @@ func signTestMessage(t *testing.T, key any, algorithm Algorithm, message []byte)
 
 			return signature
 		}
+
 		signature, err := rsa.SignPKCS1v15(rand.Reader, key, hash, digest)
 		if err != nil {
 			t.Fatalf("sign RSA: %v", err)

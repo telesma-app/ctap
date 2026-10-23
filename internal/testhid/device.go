@@ -60,6 +60,7 @@ func New(t testing.TB, responses ...Response) *Device {
 	t.Helper()
 
 	var reads bytes.Buffer
+
 	for _, response := range responses {
 		msg, err := ctaphid.NewMessage(response.CID, response.Command, response.Data)
 		if err != nil {
@@ -70,6 +71,7 @@ func New(t testing.TB, responses ...Response) *Device {
 		if _, err := msg.WriteTo(&withReportIDs); err != nil {
 			t.Fatalf("encode CTAPHID response message: %v", err)
 		}
+
 		reads.Write(stripReportIDs(withReportIDs.Bytes()))
 	}
 
@@ -150,11 +152,13 @@ func (d *Device) FirstCTAPRequestMap(t testing.TB) (protocol.Command, map[uint64
 
 func ParseRequests(written []byte) ([]Request, error) {
 	var requests []Request
+
 	for len(written) > 0 {
 		request, consumed, err := parseRequest(written)
 		if err != nil {
 			return nil, err
 		}
+
 		requests = append(requests, request)
 		written = written[consumed:]
 	}
@@ -168,6 +172,7 @@ func (r Request) CTAPPayload(t testing.TB) (protocol.Command, []byte) {
 	if r.Command != ctaphid.CTAPHID_CBOR {
 		t.Fatalf("expected CTAPHID_CBOR request, got %s", r.Command)
 	}
+
 	if len(r.Data) == 0 {
 		t.Fatalf("expected CTAP command byte in CTAPHID_CBOR request")
 	}
@@ -179,6 +184,7 @@ func (r Request) CTAPRequestMap(t testing.TB) (protocol.Command, map[uint64]any)
 	t.Helper()
 
 	command, requestCBOR := r.CTAPPayload(t)
+
 	var request map[uint64]any
 	if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 		t.Fatalf("decode CTAP request CBOR: %v", err)
@@ -201,6 +207,7 @@ func parseRequest(written []byte) (Request, int, error) {
 	if len(written) < hidReportPacketSize {
 		return Request{}, 0, io.ErrUnexpectedEOF
 	}
+
 	if written[0] != 0 {
 		return Request{}, 0, fmt.Errorf("unexpected report ID %d", written[0])
 	}
@@ -212,6 +219,7 @@ func parseRequest(written []byte) (Request, int, error) {
 	if cmd&initPacketBit == 0 {
 		return Request{}, 0, fmt.Errorf("continuation packet before init packet")
 	}
+
 	request.Command = ctaphid.Command(cmd &^ initPacketBit)
 
 	length := int(binary.BigEndian.Uint16(written[6:8]))
@@ -227,12 +235,15 @@ func parseRequest(written []byte) (Request, int, error) {
 		if len(written) < consumed+hidReportPacketSize {
 			return Request{}, 0, io.ErrUnexpectedEOF
 		}
+
 		if written[consumed] != 0 {
 			return Request{}, 0, fmt.Errorf("unexpected report ID %d", written[consumed])
 		}
+
 		if !bytes.Equal(written[consumed+1:consumed+5], request.CID[:]) {
 			return Request{}, 0, fmt.Errorf("unexpected continuation CID")
 		}
+
 		if written[consumed+5] != expectedSequence {
 			return Request{}, 0, fmt.Errorf("unexpected continuation sequence")
 		}

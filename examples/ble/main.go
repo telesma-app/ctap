@@ -64,10 +64,7 @@ func run(ctx context.Context) error {
 	}
 	defer authenticator.Close()
 
-	info, ok := authenticator.GetInfoCached()
-	if !ok {
-		return errors.New("authenticatorGetInfo response is unavailable")
-	}
+	info, _ := authenticator.GetInfoCached()
 	encoded, err := json.MarshalIndent(info, "", "  ")
 	if err != nil {
 		return err

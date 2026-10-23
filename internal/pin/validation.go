@@ -65,9 +65,11 @@ func NormalizeAndValidate(value string, minCodePoints uint) (string, error) {
 	if uint(utf8.RuneCountInString(value)) < minCodePoints {
 		return "", fmt.Errorf("pin must contain at least %d Unicode code points", minCodePoints)
 	}
+
 	if len([]byte(value)) > maxUTF8Bytes {
 		return "", fmt.Errorf("pin must be at most %d UTF-8 bytes", maxUTF8Bytes)
 	}
+
 	if value[len(value)-1] == 0x00 {
 		return "", fmt.Errorf("pin must not end in a 0x00 byte")
 	}

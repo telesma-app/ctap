@@ -12,6 +12,7 @@ func ensureDataLen(data []byte, min int) error {
 	if len(data) < min {
 		return ErrInvalidResponseMessage
 	}
+
 	return nil
 }
 
@@ -22,9 +23,11 @@ func writeCBOR(ctx context.Context, dev Device, cid ChannelID, data []byte) (pro
 	if err != nil {
 		return 0, err
 	}
+
 	if _, err := msg.WriteTo(ghid.WithContext(ctx, dev)); err != nil {
 		return 0, err
 	}
+
 	return command, nil
 }
 
@@ -34,6 +37,7 @@ func CBOR(ctx context.Context, dev Device, cid ChannelID, data []byte) (transpor
 	if err != nil {
 		return transport.CBORResponse{}, err
 	}
+
 	return readCBORResponse(ctx, dev, cid, command)
 }
 
@@ -60,6 +64,7 @@ func readCBORResponse(ctx context.Context, dev Device, cid ChannelID, command pr
 			if err := ensureDataLen(p.data, 1); err != nil {
 				return transport.CBORResponse{}, err
 			}
+
 			return transport.CBORResponse{}, &ErrorResponse{ErrorCode: Error(p.data[0])}
 		case CTAPHID_KEEPALIVE:
 			continue
@@ -71,6 +76,7 @@ func readCBORResponse(ctx context.Context, dev Device, cid ChannelID, command pr
 		for _, p := range respMsg {
 			respData = append(respData, p.data...)
 		}
+
 		response := transport.CBORResponse{
 			StatusCode: transport.StatusCode(respData[0]),
 			Data:       respData[1:],
@@ -109,6 +115,7 @@ func Init(ctx context.Context, dev Device, cid ChannelID, nonce [8]byte) (InitRe
 			if err := ensureDataLen(p.data, 17); err != nil {
 				return InitResponse{}, err
 			}
+
 			if [8]byte(p.data[:8]) != nonce {
 				// Broadcast INIT responses from other clients use the same CID.
 				continue
@@ -129,6 +136,7 @@ func Init(ctx context.Context, dev Device, cid ChannelID, nonce [8]byte) (InitRe
 			if err := ensureDataLen(p.data, 1); err != nil {
 				return InitResponse{}, err
 			}
+
 			return InitResponse{}, &ErrorResponse{ErrorCode: Error(p.data[0])}
 		case CTAPHID_KEEPALIVE:
 			continue
@@ -167,6 +175,7 @@ func Ping(ctx context.Context, dev Device, cid ChannelID, data []byte) (PingResp
 			if err := ensureDataLen(p.data, 1); err != nil {
 				return PingResponse{}, err
 			}
+
 			return PingResponse{}, &ErrorResponse{ErrorCode: Error(p.data[0])}
 		case CTAPHID_KEEPALIVE:
 			continue
@@ -193,6 +202,7 @@ func Vendor(ctx context.Context, dev Device, cid ChannelID, command Command, dat
 	if err != nil {
 		return VendorResponse{}, err
 	}
+
 	bound := ghid.WithContext(ctx, dev)
 	if _, err := msg.WriteTo(bound); err != nil {
 		return VendorResponse{}, err
@@ -203,6 +213,7 @@ func Vendor(ctx context.Context, dev Device, cid ChannelID, command Command, dat
 		if _, err := respMsg.ReadFrom(bound); err != nil {
 			return VendorResponse{}, err
 		}
+
 		if respMsg.CID() != cid {
 			continue
 		}
@@ -214,6 +225,7 @@ func Vendor(ctx context.Context, dev Device, cid ChannelID, command Command, dat
 			if err := ensureDataLen(p.data, 1); err != nil {
 				return VendorResponse{}, err
 			}
+
 			return VendorResponse{}, &ErrorResponse{ErrorCode: Error(p.data[0])}
 		case CTAPHID_KEEPALIVE:
 			continue
@@ -275,6 +287,7 @@ func Wink(ctx context.Context, dev Device, cid ChannelID) error {
 			if err := ensureDataLen(p.data, 1); err != nil {
 				return err
 			}
+
 			return &ErrorResponse{ErrorCode: Error(p.data[0])}
 		case CTAPHID_KEEPALIVE:
 			continue
@@ -319,6 +332,7 @@ func Lock(ctx context.Context, dev Device, cid ChannelID, seconds uint8) error {
 			if err := ensureDataLen(p.data, 1); err != nil {
 				return err
 			}
+
 			return &ErrorResponse{ErrorCode: Error(p.data[0])}
 		case CTAPHID_KEEPALIVE:
 			continue

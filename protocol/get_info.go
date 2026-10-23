@@ -79,6 +79,7 @@ func (uv UserVerify) String() string {
 	}
 
 	parts := make([]string, 0, len(namedUserVerifications)+1)
+
 	known := UserVerify(0)
 	for _, named := range namedUserVerifications {
 		known |= named.value

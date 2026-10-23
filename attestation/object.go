@@ -20,6 +20,7 @@ func ParseObject(raw []byte) (Object, error) {
 	if err := cbor.Unmarshal(raw, &object); err != nil {
 		return Object{}, fmt.Errorf("%w: decode object: %v", ErrStatementMalformed, err)
 	}
+
 	if object.Format == "" || object.AuthData == nil || object.Statement == nil {
 		return Object{}, fmt.Errorf("%w: incomplete object", ErrStatementMalformed)
 	}
@@ -42,9 +43,11 @@ func (o Object) TypeAndCertificateChain() (Type, [][]byte, error) {
 		if !ok {
 			return TypeUnsupported, nil, ErrStatementMalformed
 		}
+
 		if _, present := o.Statement["ecdaaKeyId"]; present {
 			return TypeUnsupported, nil, ErrFormatUnsupported
 		}
+
 		if len(statement.X509Chain) == 0 {
 			return TypeSelf, nil, nil
 		}
@@ -68,6 +71,7 @@ func ParsePackedStatement(values map[string]any) (PackedAttestationStatementForm
 	if !ok {
 		return PackedAttestationStatementFormat{}, false
 	}
+
 	signature, ok := values["sig"].([]byte)
 	if !ok {
 		return PackedAttestationStatementFormat{}, false
@@ -94,6 +98,7 @@ func ParseFIDOU2FStatement(values map[string]any) (FIDOU2FAttestationStatementFo
 	if !ok {
 		return FIDOU2FAttestationStatementFormat{}, false
 	}
+
 	signature, ok := values["sig"].([]byte)
 	if !ok {
 		return FIDOU2FAttestationStatementFormat{}, false
@@ -111,22 +116,27 @@ func ParseTPMStatement(values map[string]any) (TPMAttestationStatementFormat, bo
 	if !ok {
 		return TPMAttestationStatementFormat{}, false
 	}
+
 	algorithm, ok := integer(values["alg"])
 	if !ok {
 		return TPMAttestationStatementFormat{}, false
 	}
+
 	chain, ok := x509Chain(values["x5c"])
 	if !ok {
 		return TPMAttestationStatementFormat{}, false
 	}
+
 	signature, ok := values["sig"].([]byte)
 	if !ok {
 		return TPMAttestationStatementFormat{}, false
 	}
+
 	certInfo, ok := values["certInfo"].([]byte)
 	if !ok {
 		return TPMAttestationStatementFormat{}, false
 	}
+
 	publicArea, ok := values["pubArea"].([]byte)
 	if !ok {
 		return TPMAttestationStatementFormat{}, false
@@ -189,6 +199,7 @@ func x509Chain(raw any) ([][]byte, bool) {
 		if !ok {
 			return nil, false
 		}
+
 		chain = append(chain, certificate)
 	}
 

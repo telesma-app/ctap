@@ -22,6 +22,7 @@ func cborIntegerFields(t *testing.T, value any) map[uint64]cbor.RawMessage {
 	if err := cbor.Unmarshal(raw, &fields); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return fields
 }
 
@@ -88,6 +89,7 @@ func TestGetInfoPreservesOnlyPresenceSensitiveZeroValues(t *testing.T) {
 
 	zero := uint(0)
 	disabled := false
+
 	presentFields := cborIntegerFields(t, AuthenticatorGetInfoResponse{
 		MaxRPIDsForSetMinPINLength:       &zero,
 		RemainingDiscoverableCredentials: &zero,
@@ -106,6 +108,7 @@ func TestGetInfoPreservesOnlyPresenceSensitiveZeroValues(t *testing.T) {
 
 func TestPresenceSensitiveEmptyWireValuesAreEncoded(t *testing.T) {
 	empty := ""
+
 	tests := []struct {
 		name  string
 		value any
@@ -150,10 +153,13 @@ func TestPresenceSensitiveEmptyWireValuesAreEncoded(t *testing.T) {
 		if err := cbor.Unmarshal(raw, &fields); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		requireRawField(t, fields, "id", cbor.RawMessage{0x40})
+
 		if _, ok := fields["name"]; ok {
 			t.Fatalf("value unexpectedly contains %#v", "name")
 		}
+
 		if _, ok := fields["displayName"]; ok {
 			t.Fatalf("value unexpectedly contains %#v", "displayName")
 		}
@@ -165,6 +171,7 @@ func TestLargeBlobsRequestPreservesZeroLengthOperations(t *testing.T) {
 
 	getFields := cborIntegerFields(t, AuthenticatorLargeBlobsRequest{Get: &zero})
 	requireRawField(t, getFields, uint64(1), cbor.RawMessage{0x00})
+
 	if _, ok := getFields[uint64(2)]; ok {
 		t.Fatalf("value unexpectedly contains %#v", uint64(2))
 	}
@@ -173,6 +180,7 @@ func TestLargeBlobsRequestPreservesZeroLengthOperations(t *testing.T) {
 	if _, ok := setFields[uint64(1)]; ok {
 		t.Fatalf("value unexpectedly contains %#v", uint64(1))
 	}
+
 	requireRawField(t, setFields, uint64(2), cbor.RawMessage{0x40})
 }
 
@@ -180,6 +188,7 @@ func TestConditionalResponseMembersAreOmittedWhenAbsent(t *testing.T) {
 	if got := cborIntegerFields(t, AuthenticatorClientPINResponse{}); len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if got := cborIntegerFields(t, AuthenticatorCredentialManagementResponse{}); len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
@@ -206,6 +215,7 @@ func TestPresenceSensitiveZeroResponseMembersAreEncoded(t *testing.T) {
 	}
 
 	goodSample := LastEnrollSampleStatus(0)
+
 	bioFields := cborIntegerFields(t, AuthenticatorBioEnrollmentResponse{
 		LastEnrollSampleStatus: &goodSample,
 		RemainingSamples:       &zero,
@@ -220,10 +230,12 @@ func TestPresenceSensitiveZeroResponseMembersAreEncoded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	var extensionFields map[string]cbor.RawMessage
 	if err := cbor.Unmarshal(raw, &extensionFields); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	requireRawField(t, extensionFields, "credBlob", cbor.RawMessage{0x40})
 }
 
@@ -239,6 +251,7 @@ func cborStringFields(t *testing.T, value any) map[string]cbor.RawMessage {
 	if err := cbor.Unmarshal(raw, &fields); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return fields
 }
 
@@ -256,14 +269,17 @@ func nonZeroFieldValue(t *testing.T, fieldType reflect.Type) reflect.Value {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		value := reflect.New(fieldType).Elem()
 		value.SetInt(1)
+
 		return value
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		value := reflect.New(fieldType).Elem()
 		value.SetUint(1)
+
 		return value
 	case reflect.Bool:
 		value := reflect.New(fieldType).Elem()
 		value.SetBool(true)
+
 		return value
 	default:
 		t.Fatalf("unhandled field kind %v; extend nonZeroFieldValue", fieldType.Kind())
@@ -321,6 +337,7 @@ func TestExtensionIsZeroMatchesWirePresence(t *testing.T) {
 			if !zero.Interface().(interface{ IsZero() bool }).IsZero() {
 				t.Fatalf("zero %s reports IsZero false", test.inner)
 			}
+
 			if _, present := cborStringFields(t, test.wrap(zero))[test.memberKey]; present {
 				t.Fatalf("zero %s encoded member %q", test.inner, test.memberKey)
 			}
@@ -337,6 +354,7 @@ func TestExtensionIsZeroMatchesWirePresence(t *testing.T) {
 							field.Name, test.inner,
 						)
 					}
+
 					if _, present := cborStringFields(t, test.wrap(value))[test.memberKey]; !present {
 						t.Errorf(
 							"member %q is omitted with %s set; IsZero and the wire representation disagree",

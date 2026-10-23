@@ -22,11 +22,14 @@ var testContext = context.Background()
 
 func newTestDevice(t testing.TB, fake *testhid.Device, info protocol.AuthenticatorGetInfoResponse) *Device {
 	t.Helper()
+
 	transport := testhid.Transport{Device: fake, CID: testCID}
+
 	ctapClient, err := client.NewClient(options.WithTransport(transport))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return &Device{
 		transport:  transport,
 		ctapClient: ctapClient,
@@ -42,6 +45,7 @@ func encodeCBOR(t testing.TB, v any) []byte {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return b
 }
 
@@ -57,6 +61,7 @@ func testKeyAgreement(t testing.TB) cose.Key {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return coseKey
 }
 
@@ -81,11 +86,13 @@ func makeCredentialAuthData(t testing.TB, key cose.Key) []byte {
 	data = append(data, length...)
 	data = append(data, credentialID...)
 	data = append(data, encodeCBOR(t, key)...)
+
 	return data
 }
 
 func testP256CredentialKey(algorithm cose.Algorithm) cose.Key {
 	curve := elliptic.P256().Params()
+
 	return cose.Key{
 		cose.KeyParameterKty:    cose.KeyTypeEC2,
 		cose.KeyParameterAlg:    algorithm,
@@ -140,6 +147,7 @@ func credentialManagementResponseIsZero(response protocol.AuthenticatorCredentia
 
 func assertNoAuthenticatorIO(t testing.TB, fake *testhid.Device) {
 	t.Helper()
+
 	if got := fake.Writes(); len(got) != 0 {
 		t.Errorf("got non-empty value %#v; context: %s", got, "validation must fail before transport I/O")
 	}

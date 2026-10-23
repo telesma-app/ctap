@@ -38,6 +38,7 @@ func (m Message) OutputReports() []OutputReport {
 	reports := make([]OutputReport, len(m))
 	for i, packet := range m {
 		reports[i][0] = 0
+
 		buffer := bytes.NewBuffer(reports[i][1:1])
 		if _, err := packet.WriteTo(buffer); err != nil {
 			panic(err)

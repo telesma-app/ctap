@@ -65,10 +65,12 @@ func TestDeriveP256DraftVectors(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			algorithm, err := derived.Algorithm()
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got, want := algorithm, cose.AlgorithmESP256; got != want {
 				t.Fatalf("got %#v, want %#v", got, want)
 			}
@@ -88,6 +90,7 @@ func TestDeriveP256DraftVectors(t *testing.T) {
 					t.Fatalf("got %#v, want %#v", got, want)
 				}
 			}
+
 			if got, want := keyHandle, hexBytes(t, test.keyHandle); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 				t.Fatalf("got %#v, want %#v", got, want)
 			}
@@ -96,23 +99,29 @@ func TestDeriveP256DraftVectors(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			kemCurvePoint, err := p256PublicKey(kemKey, cose.AlgorithmECDHESHKDF256, "KEM public key")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			kemPoint, err := ecdh.P256().NewPublicKey(kemCurvePoint.Bytes())
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			contextWithLength := append([]byte{byte(len(context))}, context...)
 			kemContext := append([]byte("ARKG-Derive-Key-KEM."), contextWithLength...)
+
 			sharedSecret, encapsulatedHandle, err := p256Encapsulate(kemPoint, input, kemContext)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got, want := sharedSecret, hexBytes(t, test.sharedSecret); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 				t.Fatalf("got %#v, want %#v", got, want)
 			}
+
 			if got, want := encapsulatedHandle, keyHandle; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 				t.Fatalf("got %#v, want %#v", got, want)
 			}
@@ -133,12 +142,14 @@ func TestDeriveP256AcceptsOptionalCOSEParameters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	_, hasAlgorithm := derived[cose.KeyParameterAlg]
 	if got := hasAlgorithm; got {
 		t.Fatalf("got true, want false")
 	}
 
 	seed[-3] = "example.org/algorithm"
+
 	derived, _, err = DeriveP256(seed, make([]byte, 32), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -153,6 +164,7 @@ func TestDeriveP256AcceptsOptionalCOSEParameters(t *testing.T) {
 	}
 
 	seed[-3] = ^uint64(0)
+
 	derived, _, err = DeriveP256(seed, make([]byte, 32), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -164,6 +176,25 @@ func TestDeriveP256AcceptsOptionalCOSEParameters(t *testing.T) {
 		if !ok || gotValue != want {
 			t.Fatalf("got %#v, want %#v", got, want)
 		}
+	}
+}
+
+func TestDerivedP256CoordinateAppendPreservesOtherCoordinate(t *testing.T) {
+	skipWhenFIPS140Required(t)
+
+	key, _, err := DeriveP256(p256Seed(t), make([]byte, 32), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	x := key[cose.EC2KeyParameterX].([]byte)
+	y := key[cose.EC2KeyParameterY].([]byte)
+	wantY := bytes.Clone(y)
+
+	_ = append(x, y[0]^0xff)
+
+	if !bytes.Equal(y, wantY) {
+		t.Errorf("appending to x changed y: got %x, want %x", y, wantY)
 	}
 }
 
@@ -296,16 +327,20 @@ func TestDeriveP256RejectsFIPS140Mode(t *testing.T) {
 	if !errors.Is(err, fips140.ErrNotAllowed) {
 		t.Fatalf("got error %v, want %v", err, fips140.ErrNotAllowed)
 	}
+
 	var notAllowed *fips140.PolicyError
 	if !errors.As(err, &notAllowed) {
 		t.Fatalf("got error type %T, want *fips140.PolicyError", err)
 	}
+
 	if got, want := notAllowed.Operation, "ARKG-P256"; got != want {
 		t.Fatalf("got operation %q, want %q", got, want)
 	}
+
 	if derived != nil {
 		t.Fatalf("got derived key %#v, want nil", derived)
 	}
+
 	if keyHandle != nil {
 		t.Fatalf("got key handle %#v, want nil", keyHandle)
 	}
@@ -320,6 +355,7 @@ func FuzzDeriveP256(f *testing.F) {
 	if err != nil {
 		f.Fatalf("unexpected error: %v", err)
 	}
+
 	f.Add(encoded, make([]byte, 32), []byte("context"))
 	f.Add([]byte{0xa0}, []byte{}, make([]byte, p256ContextLimit+1))
 
@@ -328,12 +364,14 @@ func FuzzDeriveP256(f *testing.F) {
 		if cbor.Unmarshal(encoded, &seed) != nil {
 			return
 		}
+
 		_, _, _ = DeriveP256(seed, inputKeyMaterial, context)
 	})
 }
 
 func skipWhenFIPS140Required(t *testing.T) {
 	t.Helper()
+
 	if cryptofips140.Enabled() {
 		t.Skip("FIPS 140-3 mode is enabled")
 	}
@@ -341,19 +379,23 @@ func skipWhenFIPS140Required(t *testing.T) {
 
 func decodedP256Seed(t *testing.T) cose.Key {
 	t.Helper()
+
 	encoded, err := cbor.Marshal(p256Seed(t))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	var seed cose.Key
 	if err := cbor.Unmarshal(encoded, &seed); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return seed
 }
 
 func p256Seed(t testReporter) cose.Key {
 	t.Helper()
+
 	return cose.Key{
 		cose.KeyParameterKty: cose.KeyTypeARKGPublicSeedPlaceholder,
 		cose.KeyParameterAlg: cose.AlgorithmARKGP256Placeholder,
@@ -382,9 +424,11 @@ type testReporter interface {
 
 func hexBytes(t testReporter, value string) []byte {
 	t.Helper()
+
 	decoded, err := hex.DecodeString(value)
 	if err != nil {
 		t.Fatalf("decode hex: %v", err)
 	}
+
 	return decoded
 }

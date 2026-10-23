@@ -49,6 +49,7 @@ func retryChannelBusy[T any](ctx context.Context, operation func() (T, error)) (
 			timer.Stop()
 
 			var zero T
+
 			return zero, ctx.Err()
 
 		case <-timer.C:
@@ -71,6 +72,7 @@ func (t *Transport) closeOnIOError(err error) error {
 	}
 
 	_ = t.device.Close()
+
 	return &ctaptransport.DeviceInvalidatedError{Err: err}
 }
 
@@ -81,6 +83,7 @@ func Open(ctx context.Context, device Device) (*Transport, error) {
 	rand.Read(nonce[:])
 
 	channel := newChannelDevice(device, BROADCAST_CID)
+
 	response, err := retryChannelBusy(ctx, func() (InitResponse, error) {
 		return Init(ctx, channel, BROADCAST_CID, nonce)
 	})
@@ -88,6 +91,7 @@ func Open(ctx context.Context, device Device) (*Transport, error) {
 		channel.stop()
 		return nil, err
 	}
+
 	channel.setCID(response.CID)
 
 	return &Transport{device: channel, init: response}, nil
@@ -125,6 +129,7 @@ func (t *Transport) exchangeCBOR(ctx context.Context, data []byte) (ctaptranspor
 	}
 
 	response, err := readCBORResponse(ctx, t.device, t.init.CID, command)
+
 	ctxErr := ctx.Err()
 	if ctxErr == nil || !errors.Is(err, ctxErr) {
 		return response, err
@@ -134,6 +139,7 @@ func (t *Transport) exchangeCBOR(ctx context.Context, data []byte) (ctaptranspor
 	cancelCtx := context.WithoutCancel(ctx)
 	if cancelErr := t.Cancel(cancelCtx); cancelErr == nil {
 		_, drainErr := readCBORResponse(cancelCtx, t.device, t.init.CID, command)
+
 		_, terminalStatus := errors.AsType[*ctaptransport.CTAPError](drainErr)
 		if drainErr == nil || terminalStatus {
 			return response, err
@@ -141,6 +147,7 @@ func (t *Transport) exchangeCBOR(ctx context.Context, data []byte) (ctaptranspor
 	}
 
 	_ = t.device.Close()
+
 	return response, &ctaptransport.DeviceInvalidatedError{Err: err}
 }
 
@@ -216,6 +223,7 @@ func (t *Transport) Cancel(ctx context.Context) error {
 	}
 
 	err := Cancel(ctx, t.device, t.init.CID)
+
 	return t.closeOnIOError(err)
 }
 
@@ -240,6 +248,7 @@ func (t *Transport) Close() error {
 	if t.activeCBOR.Load() && t.writeMu.TryLock() {
 		ctx, cancel := context.WithTimeout(context.Background(), closeCancelTimeout)
 		_ = Cancel(ctx, t.device, t.init.CID)
+
 		cancel()
 		t.writeMu.Unlock()
 	}

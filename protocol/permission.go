@@ -29,6 +29,7 @@ func (p Permission) String() string {
 	}
 
 	parts := make([]string, 0, len(namedPermissions)+1)
+
 	known := PermissionNone
 	for _, named := range namedPermissions {
 		known |= named.value

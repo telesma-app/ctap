@@ -42,6 +42,7 @@ func openWith(
 	if err != nil {
 		return nil, errors.Join(err, peripheral.Close())
 	}
+
 	return transport, nil
 }
 
@@ -69,22 +70,29 @@ func enumerator(
 			defer cancel()
 
 			seen := make(map[gble.Identifier]struct{})
+
 			var candidates []gble.Identifier
+
 			for info, err := range devices(scanCtx) {
 				if err != nil {
 					if ctx.Err() != nil {
 						yield(nil, ctx.Err())
 						return
 					}
+
 					if errors.Is(err, context.DeadlineExceeded) && errors.Is(scanCtx.Err(), context.DeadlineExceeded) {
 						break
 					}
+
 					yield(nil, err)
+
 					return
 				}
+
 				if _, duplicate := seen[info.ID]; duplicate {
 					continue
 				}
+
 				seen[info.ID] = struct{}{}
 				candidates = append(candidates, info.ID)
 			}
@@ -94,6 +102,7 @@ func enumerator(
 					yield(nil, err)
 					return
 				}
+
 				transport, err := open(ctx, id)
 				if !yield(transport, err) {
 					return

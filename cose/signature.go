@@ -35,6 +35,7 @@ func (k Key) Algorithm() (Algorithm, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	algorithm := Algorithm(value)
 	if int64(algorithm) != value {
 		return 0, fmt.Errorf("cose: algorithm %d overflows int", value)
@@ -49,12 +50,14 @@ func (k Key) PublicKey() (crypto.PublicKey, error) {
 	if k == nil {
 		return nil, errors.New("cose: nil credential key")
 	}
+
 	keyType, err := keyInteger(k, KeyParameterKty, "kty")
 	if err != nil {
 		return nil, err
 	}
 
 	var publicKey crypto.PublicKey
+
 	switch keyType {
 	case KeyTypeOKP:
 		publicKey, err = k.okpPublicKey()
@@ -65,20 +68,25 @@ func (k Key) PublicKey() (crypto.PublicKey, error) {
 	default:
 		return nil, fmt.Errorf("%w: key type %d", ErrUnsupportedKey, keyType)
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	algorithm, err := k.Algorithm()
 	if err != nil {
 		return nil, err
 	}
+
 	spec, found := signatureAlgorithms[algorithm]
 	if !found {
 		return nil, fmt.Errorf("%w: %d", ErrUnsupportedAlgorithm, algorithm)
 	}
+
 	if err := enforceFIPS140SignaturePolicy(publicKey, algorithm, spec); err != nil {
 		return nil, err
 	}
+
 	if err := validatePublicKeyAlgorithm(publicKey, spec); err != nil {
 		return nil, err
 	}
@@ -92,12 +100,11 @@ func VerifySignature(publicKey crypto.PublicKey, algorithm Algorithm, message, s
 	if !found {
 		return fmt.Errorf("%w: %d", ErrUnsupportedAlgorithm, algorithm)
 	}
-	if publicKey == nil {
-		return ErrKeyAlgorithmMismatch
-	}
+
 	if err := enforceFIPS140SignaturePolicy(publicKey, algorithm, spec); err != nil {
 		return err
 	}
+
 	if err := validatePublicKeyAlgorithm(publicKey, spec); err != nil {
 		return err
 	}
@@ -106,29 +113,21 @@ func VerifySignature(publicKey crypto.PublicKey, algorithm Algorithm, message, s
 	case signatureEdDSA:
 		switch key := publicKey.(type) {
 		case ed25519.PublicKey:
-			if spec.curve != 0 && spec.curve != EllipticCurveEd25519 {
-				return ErrKeyAlgorithmMismatch
-			}
 			if !ed25519.Verify(key, message, signature) {
 				return ErrInvalidSignature
 			}
 		case ed448.PublicKey:
-			if spec.curve != 0 && spec.curve != EllipticCurveEd448 {
-				return ErrKeyAlgorithmMismatch
-			}
 			if !ed448.Verify(key, message, signature, "") {
 				return ErrInvalidSignature
 			}
 		default:
-			return ErrKeyAlgorithmMismatch
+			panic("unreachable COSE EdDSA key type")
 		}
 
 		return nil
 	case signatureECDSA:
-		key, ok := publicKey.(*ecdsa.PublicKey)
-		if !ok || curveID(key.Curve) != spec.curve {
-			return ErrKeyAlgorithmMismatch
-		}
+		key := publicKey.(*ecdsa.PublicKey)
+
 		digest := signatureDigest(spec.hash, message)
 		if !ecdsa.VerifyASN1(key, digest, signature) {
 			return ErrInvalidSignature
@@ -136,11 +135,9 @@ func VerifySignature(publicKey crypto.PublicKey, algorithm Algorithm, message, s
 
 		return nil
 	case signatureECDSASecp256k1:
-		key, ok := publicKey.(*secp256k1.PublicKey)
-		if !ok {
-			return ErrKeyAlgorithmMismatch
-		}
+		key := publicKey.(*secp256k1.PublicKey)
 		digest := signatureDigest(spec.hash, message)
+
 		parsed, err := secp256k1ecdsa.ParseDERSignature(signature)
 		if err != nil || !parsed.Verify(digest, key) {
 			return ErrInvalidSignature
@@ -148,10 +145,8 @@ func VerifySignature(publicKey crypto.PublicKey, algorithm Algorithm, message, s
 
 		return nil
 	case signatureRSA:
-		key, ok := publicKey.(*rsa.PublicKey)
-		if !ok {
-			return ErrKeyAlgorithmMismatch
-		}
+		key := publicKey.(*rsa.PublicKey)
+
 		digest := signatureDigest(spec.hash, message)
 		if err := rsa.VerifyPKCS1v15(key, spec.hash, digest, signature); err != nil {
 			return fmt.Errorf("%w: %v", ErrInvalidSignature, err)
@@ -159,10 +154,8 @@ func VerifySignature(publicKey crypto.PublicKey, algorithm Algorithm, message, s
 
 		return nil
 	case signatureRSAPSS:
-		key, ok := publicKey.(*rsa.PublicKey)
-		if !ok {
-			return ErrKeyAlgorithmMismatch
-		}
+		key := publicKey.(*rsa.PublicKey)
+
 		digest := signatureDigest(spec.hash, message)
 		if err := rsa.VerifyPSS(key, spec.hash, digest, signature, &rsa.PSSOptions{
 			SaltLength: rsa.PSSSaltLengthEqualsHash,
@@ -185,6 +178,7 @@ func enforceFIPS140SignaturePolicy(
 	if !cryptofips140.Enabled() {
 		return nil
 	}
+
 	switch spec.fips {
 	case fips140Approved:
 	case fips140VerifyOnly:
@@ -193,6 +187,7 @@ func enforceFIPS140SignaturePolicy(
 				Operation: fmt.Sprintf("COSE signature algorithm %d", algorithm),
 			}
 		}
+
 		if _, ok := publicKey.(ed25519.PublicKey); !ok {
 			return &ctapfips140.PolicyError{
 				Operation: fmt.Sprintf("COSE signature algorithm %d with a non-Ed25519 key", algorithm),
@@ -203,13 +198,9 @@ func enforceFIPS140SignaturePolicy(
 			Operation: fmt.Sprintf("COSE signature algorithm %d", algorithm),
 		}
 	}
+
 	if spec.kind == signatureRSA || spec.kind == signatureRSAPSS {
 		if key, ok := publicKey.(*rsa.PublicKey); ok {
-			if key == nil || key.N == nil {
-				return &ctapfips140.PolicyError{
-					Operation: fmt.Sprintf("COSE RSA public key parameters for algorithm %d", algorithm),
-				}
-			}
 			bits := key.N.BitLen()
 			if key.N.Sign() <= 0 || key.N.Bit(0) != 1 || bits < 2048 || bits%2 != 0 ||
 				key.E <= 1<<16 || key.E > math.MaxInt32 || key.E&1 != 1 {
@@ -219,6 +210,7 @@ func enforceFIPS140SignaturePolicy(
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -326,6 +318,7 @@ func (k Key) okpPublicKey() (crypto.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	switch curve {
 	case EllipticCurveEd25519:
 		if len(x) != ed25519.PublicKeySize {
@@ -337,9 +330,11 @@ func (k Key) okpPublicKey() (crypto.PublicKey, error) {
 		if cryptofips140.Enabled() {
 			return nil, &ctapfips140.PolicyError{Operation: "COSE Ed448 public key"}
 		}
+
 		if len(x) != ed448.PublicKeySize {
 			return nil, fmt.Errorf("cose: invalid Ed448 public key length %d", len(x))
 		}
+
 		point, err := goldilocks.FromBytes(x)
 		if err != nil || point.IsIdentity() {
 			return nil, errors.New("cose: invalid Ed448 public key")
@@ -357,8 +352,11 @@ func (k Key) ec2PublicKey() (crypto.PublicKey, error) {
 		return nil, err
 	}
 
-	var curve elliptic.Curve
-	var size int
+	var (
+		curve elliptic.Curve
+		size  int
+	)
+
 	switch curveValue {
 	case EllipticCurveP256:
 		curve = elliptic.P256()
@@ -370,6 +368,7 @@ func (k Key) ec2PublicKey() (crypto.PublicKey, error) {
 		if cryptofips140.Enabled() {
 			return nil, &ctapfips140.PolicyError{Operation: "COSE secp256k1 public key"}
 		}
+
 		size = 32
 	default:
 		return nil, fmt.Errorf("%w: EC2 curve %d", ErrUnsupportedKey, curveValue)
@@ -379,13 +378,16 @@ func (k Key) ec2PublicKey() (crypto.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	yBytes, err := keyBytes(k, EC2KeyParameterY, "y")
 	if err != nil {
 		return nil, err
 	}
+
 	if size == 0 {
 		size = (curve.Params().BitSize + 7) / 8
 	}
+
 	if len(xBytes) != size || len(yBytes) != size {
 		return nil, fmt.Errorf(
 			"cose: invalid EC2 coordinate lengths x=%d y=%d, want %d",
@@ -399,6 +401,7 @@ func (k Key) ec2PublicKey() (crypto.PublicKey, error) {
 	encoded[0] = 4
 	copy(encoded[1:1+size], xBytes)
 	copy(encoded[1+size:], yBytes)
+
 	if curveValue == EllipticCurveSecp256k1 {
 		publicKey, err := secp256k1.ParsePubKey(encoded)
 		if err != nil {
@@ -407,6 +410,7 @@ func (k Key) ec2PublicKey() (crypto.PublicKey, error) {
 
 		return publicKey, nil
 	}
+
 	publicKey, err := ecdsa.ParseUncompressedPublicKey(curve, encoded)
 	if err != nil {
 		return nil, fmt.Errorf("cose: invalid EC2 public key: %w", err)
@@ -420,9 +424,11 @@ func (k Key) rsaPublicKey() (crypto.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(modulus) == 0 || modulus[0] == 0 {
 		return nil, errors.New("cose: invalid RSA modulus encoding")
 	}
+
 	n := new(big.Int).SetBytes(modulus)
 	if n.BitLen() < 2048 || n.Bit(0) == 0 {
 		return nil, errors.New("cose: RSA modulus must be an odd integer of at least 2048 bits")
@@ -432,13 +438,16 @@ func (k Key) rsaPublicKey() (crypto.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(exponentBytes) == 0 || len(exponentBytes) > 8 || exponentBytes[0] == 0 {
 		return nil, errors.New("cose: invalid RSA exponent encoding")
 	}
+
 	exponent := new(big.Int).SetBytes(exponentBytes)
 	if !exponent.IsInt64() {
 		return nil, errors.New("cose: RSA exponent is too large")
 	}
+
 	e := exponent.Int64()
 	if e < 3 || e%2 == 0 || int64(int(e)) != e {
 		return nil, errors.New("cose: RSA exponent must be an odd integer representable as int")
@@ -470,6 +479,7 @@ func keyInteger(k Key, label int, name string) (int64, error) {
 		if uint64(value) > math.MaxInt64 {
 			break
 		}
+
 		return int64(value), nil
 	case uint8:
 		return int64(value), nil
@@ -491,6 +501,7 @@ func keyBytes(k Key, label int, name string) ([]byte, error) {
 	if !found {
 		return nil, fmt.Errorf("cose: credential key is missing %s", name)
 	}
+
 	bytes, ok := value.([]byte)
 	if !ok {
 		return nil, fmt.Errorf("cose: credential key has invalid %s type %T", name, value)

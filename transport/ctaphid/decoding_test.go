@@ -51,10 +51,12 @@ func TestMessage_ReadFromRejectsInvalidContinuationSequence(t *testing.T) {
 	raw[hidPacketSize+4] = 1
 
 	m := new(Message)
+
 	_, err := m.ReadFrom(bytes.NewReader(raw))
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if got := errors.Is(err, ErrInvalidResponseMessage); !got {
 		t.Errorf("got false, want true")
 	}
@@ -65,10 +67,12 @@ func TestMessage_ReadFromRejectsInvalidContinuationCID(t *testing.T) {
 	raw[hidPacketSize] ^= 0xff
 
 	m := new(Message)
+
 	_, err := m.ReadFrom(bytes.NewReader(raw))
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if got := errors.Is(err, ErrInvalidResponseMessage); !got {
 		t.Errorf("got false, want true")
 	}
@@ -76,6 +80,7 @@ func TestMessage_ReadFromRejectsInvalidContinuationCID(t *testing.T) {
 
 func TestCBORSkipsUnexpectedResponseCID(t *testing.T) {
 	responseCID := ChannelID{9, 9, 9, 9}
+
 	msg, err := NewMessage(responseCID, CTAPHID_CBOR, []byte{byte(ctaptransport.CTAP2_OK)})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -90,13 +95,16 @@ func TestCBORSkipsUnexpectedResponseCID(t *testing.T) {
 	}
 
 	dev := &scriptedDevice{reads: bytes.NewReader(reads.Bytes())}
+
 	_, err = newTestTransport(dev, ChannelID{1, 2, 3, 4}).CBOR(context.Background(), []byte{0x04})
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if err, target := err, io.EOF; !errors.Is(err, target) {
 		t.Errorf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
+
 	var ioErr *ctaptransport.IOError
 	if got := errors.As(err, &ioErr); !got {
 		t.Errorf("got false, want true")

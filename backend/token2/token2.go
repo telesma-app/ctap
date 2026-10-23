@@ -25,18 +25,23 @@ func Devices(ctx context.Context) iter.Seq2[*nativepcsc.ReaderInfo, error] {
 			if isUnsupportedCard(err) {
 				continue
 			}
+
 			if err != nil {
 				if !yield(nil, err) {
 					return
 				}
+
 				continue
 			}
+
 			if err := transport.Close(); err != nil {
 				if !yield(nil, err) {
 					return
 				}
+
 				continue
 			}
+
 			if !yield(reader, nil) {
 				return
 			}
@@ -80,6 +85,7 @@ func Enumerate(ctx context.Context) iter.Seq2[ctaptransport.Device, error] {
 			if isUnsupportedCard(err) {
 				continue
 			}
+
 			if !yield(transport, err) {
 				return
 			}

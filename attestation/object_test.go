@@ -26,13 +26,16 @@ func TestParseObjectAndExtractCertificateChain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseObject() error = %v", err)
 	}
+
 	attestationType, chain, err := object.TypeAndCertificateChain()
 	if err != nil {
 		t.Fatalf("TypeAndCertificateChain() error = %v", err)
 	}
+
 	if attestationType != TypeBasic {
 		t.Fatalf("attestation type = %q, want %q", attestationType, TypeBasic)
 	}
+
 	if len(chain) != 1 || len(chain[0]) != 3 {
 		t.Fatalf("certificate chain = %#v, want one certificate", chain)
 	}
@@ -47,6 +50,7 @@ func TestParseObjectRejectsTrailingData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal object: %v", err)
 	}
+
 	raw = append(raw, 0)
 
 	_, err = ParseObject(raw)

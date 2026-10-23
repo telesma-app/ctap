@@ -99,6 +99,7 @@ func DeriveP256(publicSeed cose.Key, inputKeyMaterial, context []byte) (cose.Key
 
 	// tau = BL-PRF(ikm_tau, ctx_bl); pk' = pk_bl + tau * G.
 	blindingDST := append([]byte("ARKG-BL-EC.ARKG-P256"), blindingContext...)
+
 	blindingFactor := p256Scalar(sharedSecret, blindingDST)
 	defer clear(blindingFactor)
 
@@ -118,8 +119,8 @@ func DeriveP256(publicSeed cose.Key, inputKeyMaterial, context []byte) (cose.Key
 	derivedKey := cose.Key{
 		cose.KeyParameterKty:    cose.KeyTypeEC2,
 		cose.EC2KeyParameterCrv: cose.EllipticCurveP256,
-		cose.EC2KeyParameterX:   append([]byte(nil), encodedPoint[1:33]...),
-		cose.EC2KeyParameterY:   append([]byte(nil), encodedPoint[33:65]...),
+		cose.EC2KeyParameterX:   encodedPoint[1:33:33],
+		cose.EC2KeyParameterY:   encodedPoint[33:65:65],
 	}
 	if hasDerivedAlgorithm {
 		derivedKey[cose.KeyParameterAlg] = derivedAlgorithm
@@ -155,6 +156,7 @@ func p256Encapsulate(publicKey *ecdh.PublicKey, inputKeyMaterial, context []byte
 
 	// mk = HKDF-Expand(prk); t = HMAC(mk, c'); c = t || c'.
 	macInfo := append([]byte("ARKG-KEM-HMAC-mac."+kemDST), context...)
+
 	macKey, err := hkdf.Expand(sha256.New, prk, string(macInfo), sha256.Size)
 	if err != nil {
 		return nil, nil, fmt.Errorf("arkg: expand P-256 KEM MAC key: %w", err)
@@ -175,6 +177,7 @@ func p256Encapsulate(publicKey *ecdh.PublicKey, inputKeyMaterial, context []byte
 
 	// k = HKDF-Expand(prk).
 	sharedInfo := append([]byte("ARKG-KEM-HMAC-shared."+kemDST), context...)
+
 	sharedSecret, err := hkdf.Expand(sha256.New, prk, string(sharedInfo), len(secret))
 	if err != nil {
 		return nil, nil, fmt.Errorf("arkg: expand P-256 shared secret: %w", err)
@@ -234,6 +237,7 @@ func isAlgorithmIdentifier(value any) bool {
 		uint, uint8, uint16, uint32, uint64:
 		return true
 	}
+
 	return false
 }
 
@@ -314,6 +318,7 @@ func mapLabel(value any) (int, bool) {
 	if !ok || int64(int(parsed)) != parsed {
 		return 0, false
 	}
+
 	return int(parsed), true
 }
 
@@ -346,5 +351,6 @@ func integer(value any) (int64, bool) {
 			return int64(value), true
 		}
 	}
+
 	return 0, false
 }

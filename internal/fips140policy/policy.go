@@ -64,6 +64,7 @@ func ValidateCredentialKey(key cose.Key) error {
 	if err != nil {
 		return err
 	}
+
 	if !algorithm.FIPS140Approved() {
 		return &ctapfips140.PolicyError{
 			Operation: fmt.Sprintf("credential algorithm %d returned by MakeCredential", algorithm),

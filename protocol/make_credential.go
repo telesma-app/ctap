@@ -76,6 +76,7 @@ func ParseMakeCredentialAuthData(data []byte) (MakeCredentialAuthData, error) {
 			Decode(&extensions); err != nil {
 			return MakeCredentialAuthData{}, err
 		}
+
 		makeCredentialAuthData.Extensions = &extensions
 	}
 

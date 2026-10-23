@@ -26,6 +26,7 @@ func TestProtocolNames(t *testing.T) {
 			t.Errorf("Command(%d).Name() = %q, %v, want %q, true", tt.value, got, ok, tt.name)
 		}
 	}
+
 	if got, ok := Command(0x7e).Name(); ok || got != "" {
 		t.Errorf("unknown Command.Name() = %q, %v, want empty, false", got, ok)
 	}
@@ -89,6 +90,7 @@ func assertNames[T namedUnsigned](
 			t.Errorf("%s(%d).Name() = %q, %v, want %q, true", typeName, tt.value, got, ok, tt.name)
 		}
 	}
+
 	if got, ok := name(T(0xfe)); ok || got != "" {
 		t.Errorf("unknown %s.Name() = %q, %v, want empty, false", typeName, got, ok)
 	}

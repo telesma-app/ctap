@@ -40,6 +40,7 @@ func newPRFRoundTripTransport(t *testing.T, result []byte) *prfRoundTripTranspor
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return &prfRoundTripTransport{t: t, privateKey: privateKey, result: result}
 }
 
@@ -50,9 +51,11 @@ func (t *prfRoundTripTransport) CBOR(
 	data []byte,
 ) (ctaptransport.CBORResponse, error) {
 	t.t.Helper()
+
 	if got := data; len(got) == 0 {
 		t.t.Fatalf("got empty value %#v, want non-empty", got)
 	}
+
 	t.requests = append(t.requests, bytes.Clone(data))
 
 	switch protocol.Command(data[0]) {
@@ -61,6 +64,7 @@ func (t *prfRoundTripTransport) CBOR(
 		if err != nil {
 			t.t.Fatalf("unexpected error: %v", err)
 		}
+
 		return ctaptransport.CBORResponse{Data: encodeCBOR(t.t, &protocol.AuthenticatorClientPINResponse{
 			KeyAgreement: keyAgreement,
 		})}, nil
@@ -70,6 +74,7 @@ func (t *prfRoundTripTransport) CBOR(
 		if err := cbor.Unmarshal(data[1:], &request); err != nil {
 			t.t.Fatalf("unexpected error: %v", err)
 		}
+
 		encryptedResult := t.encryptResult(request.Extensions.CreateHMACSecretMCInput.HMACSecret)
 
 		authData := minimalMakeCredentialAuthData(t.t)
@@ -91,7 +96,8 @@ func (t *prfRoundTripTransport) CBOR(
 		if err := cbor.Unmarshal(data[1:], &request); err != nil {
 			t.t.Fatalf("unexpected error: %v", err)
 		}
-		encryptedResult := t.encryptResult(request.Extensions.GetHMACSecretInput.HMACSecret)
+
+		encryptedResult := t.encryptResult(request.Extensions.HMACSecret)
 
 		authData := minimalAuthData()
 		authData[32] = byte(protocol.AuthDataFlagUserPresent |
@@ -118,16 +124,19 @@ func (t *prfRoundTripTransport) encryptResult(input protocol.HMACSecret) []byte 
 	if err != nil {
 		t.t.Fatalf("unexpected error: %v", err)
 	}
+
 	z, err := t.privateKey.ECDH(platformPublicKey)
 	if err != nil {
 		t.t.Fatalf("unexpected error: %v", err)
 	}
+
 	protocolNumber := input.PinUvAuthProtocol
 	if protocolNumber == 0 {
 		protocolNumber = protocol.PinUvAuthProtocolOne
 	}
 
 	var sharedSecret []byte
+
 	switch protocolNumber {
 	case protocol.PinUvAuthProtocolOne:
 		sharedSecret = protocolone.KDF(z)
@@ -146,6 +155,7 @@ func (t *prfRoundTripTransport) encryptResult(input protocol.HMACSecret) []byte 
 	case protocol.PinUvAuthProtocolTwo:
 		t.salts, err = protocoltwo.Decrypt(sharedSecret, input.SaltEnc)
 	}
+
 	if err != nil {
 		t.t.Fatalf("unexpected error: %v", err)
 	}
@@ -161,15 +171,18 @@ func (t *prfRoundTripTransport) encryptResult(input protocol.HMACSecret) []byte 
 	}
 
 	var encryptedResult []byte
+
 	switch protocolNumber {
 	case protocol.PinUvAuthProtocolOne:
 		encryptedResult, err = protocolone.Encrypt(sharedSecret, t.result)
 	case protocol.PinUvAuthProtocolTwo:
 		encryptedResult, err = protocoltwo.Encrypt(sharedSecret, t.result)
 	}
+
 	if err != nil {
 		t.t.Fatalf("unexpected error: %v", err)
 	}
+
 	return encryptedResult
 }
 
@@ -184,7 +197,9 @@ func newPRFRoundTripDevice(
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	d := &Device{transport: transport, ctapClient: ctapClient, info: info, infoValid: true}
+
 	return d
 }
 
@@ -221,15 +236,19 @@ func TestMakeCredentialPRFReportsCapabilityWithoutRequiringEvaluation(t *testing
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got := resp.ExtensionOutputs.CreatePRFOutputs; got == nil {
 				t.Fatalf("got nil, want a non-nil value")
 			}
-			if got := resp.ExtensionOutputs.CreatePRFOutputs.PRF.Enabled; !got {
+
+			if got := resp.ExtensionOutputs.PRF.Enabled; !got {
 				t.Errorf("got false, want true")
 			}
-			if got := resp.ExtensionOutputs.CreatePRFOutputs.PRF.Results.IsZero(); !got {
+
+			if got := resp.ExtensionOutputs.PRF.Results.IsZero(); !got {
 				t.Errorf("got false, want true")
 			}
+
 			if got := resp.ExtensionOutputs.CreateHMACSecretOutputs; got != nil {
 				t.Errorf("got %#v, want nil", got)
 			}
@@ -237,14 +256,18 @@ func TestMakeCredentialPRFReportsCapabilityWithoutRequiringEvaluation(t *testing
 			if got, want := len(fake.Requests(t)), 1; got != want {
 				t.Fatalf("got length %d, want %d", got, want)
 			}
+
 			_, requestCBOR := fake.FirstCTAPPayload(t)
+
 			var request protocol.AuthenticatorMakeCredentialRequest
 			if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got := request.Extensions.CreateHMACSecretInput.HMACSecret; !got {
 				t.Errorf("got false, want true")
 			}
+
 			if got := request.Extensions.CreateHMACSecretMCInput; !hmacSecretIsZero(got.HMACSecret) {
 				t.Errorf("got %#v, want zero value", got)
 			}
@@ -272,21 +295,26 @@ func TestMakeCredentialPRFWithoutHMACSecretReturnsDisabledOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := resp.ExtensionOutputs.CreatePRFOutputs; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
-	if got := resp.ExtensionOutputs.CreatePRFOutputs.PRF.Enabled; got {
+
+	if got := resp.ExtensionOutputs.PRF.Enabled; got {
 		t.Errorf("got true, want false")
 	}
 
 	_, requestCBOR := fake.FirstCTAPPayload(t)
+
 	var request protocol.AuthenticatorMakeCredentialRequest
 	if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := request.Extensions.CreateHMACSecretInput; got.HMACSecret {
 		t.Errorf("got %#v, want zero value", got)
 	}
+
 	if got := request.Extensions.CreateHMACSecretMCInput; !hmacSecretIsZero(got.HMACSecret) {
 		t.Errorf("got %#v, want zero value", got)
 	}
@@ -323,21 +351,27 @@ func TestMakeCredentialPRFEvaluatesAtCreationTimeWithExplicitUserVerification(t 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := resp.ExtensionOutputs.CreatePRFOutputs; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
+
 	if got := resp.ExtensionOutputs.CreateHMACSecretMCOutputs; got != nil {
 		t.Errorf("got %#v, want nil", got)
 	}
-	if got := resp.ExtensionOutputs.CreatePRFOutputs.PRF.Enabled; !got {
+
+	if got := resp.ExtensionOutputs.PRF.Enabled; !got {
 		t.Errorf("got false, want true")
 	}
-	if got, want := resp.ExtensionOutputs.CreatePRFOutputs.PRF.Results.First, result[:32]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
+
+	if got, want := resp.ExtensionOutputs.PRF.Results.First, result[:32]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
-	if got, want := resp.ExtensionOutputs.CreatePRFOutputs.PRF.Results.Second, result[32:]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
+
+	if got, want := resp.ExtensionOutputs.PRF.Results.Second, result[32:]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := transport.salts, prfSalts(values); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -345,19 +379,24 @@ func TestMakeCredentialPRFEvaluatesAtCreationTimeWithExplicitUserVerification(t 
 	if got, want := len(transport.requests), 2; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
 	}
+
 	if got, want := transport.requests[1][0], byte(protocol.AuthenticatorMakeCredential); got != want {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
+
 	var request protocol.AuthenticatorMakeCredentialRequest
 	if err := cbor.Unmarshal(transport.requests[1][1:], &request); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := request.Options[protocol.OptionUserVerification]; !got {
 		t.Errorf("got false, want true")
 	}
+
 	if got := request.Extensions.CreateHMACSecretInput.HMACSecret; !got {
 		t.Errorf("got false, want true")
 	}
+
 	if got := request.Extensions.CreateHMACSecretMCInput.HMACSecret.KeyAgreement; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
@@ -394,18 +433,23 @@ func TestMakeCredentialRawHMACSecretMCReturnsRawOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := resp.ExtensionOutputs.CreateHMACSecretMCOutputs; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
+
 	if got := resp.ExtensionOutputs.CreatePRFOutputs; got != nil {
 		t.Errorf("got %#v, want nil", got)
 	}
-	if got, want := resp.ExtensionOutputs.CreateHMACSecretMCOutputs.HMACGetSecret.Output1, result[:32]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
+
+	if got, want := resp.ExtensionOutputs.HMACGetSecret.Output1, result[:32]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
-	if got, want := resp.ExtensionOutputs.CreateHMACSecretMCOutputs.HMACGetSecret.Output2, result[32:]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
+
+	if got, want := resp.ExtensionOutputs.HMACGetSecret.Output2, result[32:]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := transport.salts, append(bytes.Clone(salt1), salt2...); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -441,18 +485,23 @@ func TestMakeCredentialPRFEvaluatesAtCreationTimeWithAlwaysUV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := resp.ExtensionOutputs.CreatePRFOutputs; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
-	if got := resp.ExtensionOutputs.CreatePRFOutputs.PRF.Enabled; !got {
+
+	if got := resp.ExtensionOutputs.PRF.Enabled; !got {
 		t.Errorf("got false, want true")
 	}
-	if got, want := resp.ExtensionOutputs.CreatePRFOutputs.PRF.Results.First, result; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
+
+	if got, want := resp.ExtensionOutputs.PRF.Results.First, result; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := transport.salts, prfSalts(values); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got := callerOptions[protocol.OptionUserVerification]; got {
 		t.Errorf("got true, want false")
 	}
@@ -460,16 +509,20 @@ func TestMakeCredentialPRFEvaluatesAtCreationTimeWithAlwaysUV(t *testing.T) {
 	if got, want := len(transport.requests), 2; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
 	}
+
 	if got, want := transport.requests[1][0], byte(protocol.AuthenticatorMakeCredential); got != want {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
+
 	var request protocol.AuthenticatorMakeCredentialRequest
 	if err := cbor.Unmarshal(transport.requests[1][1:], &request); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := request.Options[protocol.OptionUserVerification]; got {
 		t.Errorf("got true, want false")
 	}
+
 	if got := request.Extensions.CreateHMACSecretMCInput.HMACSecret.KeyAgreement; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
@@ -509,27 +562,34 @@ func TestMakeCredentialPRFSkipsCreationTimeEvaluationWithoutExplicitUserVerifica
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := resp.ExtensionOutputs.CreatePRFOutputs; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
-	if got := resp.ExtensionOutputs.CreatePRFOutputs.PRF.Enabled; !got {
+
+	if got := resp.ExtensionOutputs.PRF.Enabled; !got {
 		t.Errorf("got false, want true")
 	}
-	if got := resp.ExtensionOutputs.CreatePRFOutputs.PRF.Results.IsZero(); !got {
+
+	if got := resp.ExtensionOutputs.PRF.Results.IsZero(); !got {
 		t.Errorf("got false, want true")
 	}
+
 	if got := callerOptions[protocol.OptionUserVerification]; got {
 		t.Errorf("got true, want false")
 	}
 
 	_, requestCBOR := fake.FirstCTAPPayload(t)
+
 	var request protocol.AuthenticatorMakeCredentialRequest
 	if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := request.Options[protocol.OptionUserVerification]; got {
 		t.Errorf("got true, want false")
 	}
+
 	if got := request.Extensions.CreateHMACSecretMCInput; !hmacSecretIsZero(got.HMACSecret) {
 		t.Errorf("got %#v, want zero value", got)
 	}
@@ -602,6 +662,7 @@ func TestGetAssertionPRFInitializesEmptyOutputWhenNoEvaluationIsSent(t *testing.
 			d := newTestDevice(t, fake, protocol.AuthenticatorGetInfoResponse{Extensions: tt.extensions})
 
 			var assertions []protocol.AuthenticatorGetAssertionResponse
+
 			for assertion, err := range d.GetAssertion(
 				testContext,
 				nil,
@@ -616,23 +677,29 @@ func TestGetAssertionPRFInitializesEmptyOutputWhenNoEvaluationIsSent(t *testing.
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
+
 				assertions = append(assertions, assertion)
 			}
+
 			if got, want := len(assertions), 1; got != want {
 				t.Fatalf("got length %d, want %d", got, want)
 			}
+
 			if got := assertions[0].ExtensionOutputs.GetPRFOutputs; got == nil {
 				t.Fatalf("got nil, want a non-nil value")
 			}
-			if got := assertions[0].ExtensionOutputs.GetPRFOutputs.PRF.Results.IsZero(); !got {
+
+			if got := assertions[0].ExtensionOutputs.PRF.Results.IsZero(); !got {
 				t.Errorf("got false, want true")
 			}
 
 			_, requestCBOR := fake.FirstCTAPPayload(t)
+
 			var request protocol.AuthenticatorGetAssertionRequest
 			if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got := request.Extensions.GetHMACSecretInput; !hmacSecretIsZero(got.HMACSecret) {
 				t.Errorf("got %#v, want zero value", got)
 			}
@@ -653,6 +720,7 @@ func TestGetAssertionPRFEvaluatesAndReturnsDecryptedResult(t *testing.T) {
 	})
 
 	var assertions []protocol.AuthenticatorGetAssertionResponse
+
 	for assertion, err := range d.GetAssertion(
 		testContext,
 		nil,
@@ -669,21 +737,26 @@ func TestGetAssertionPRFEvaluatesAndReturnsDecryptedResult(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		assertions = append(assertions, assertion)
 	}
 
 	if got, want := len(assertions), 1; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
 	}
+
 	if got := assertions[0].ExtensionOutputs.GetPRFOutputs; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
-	if got, want := assertions[0].ExtensionOutputs.GetPRFOutputs.PRF.Results.First, result; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
+
+	if got, want := assertions[0].ExtensionOutputs.PRF.Results.First, result; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
-	if got := assertions[0].ExtensionOutputs.GetPRFOutputs.PRF.Results.Second; got != nil {
+
+	if got := assertions[0].ExtensionOutputs.PRF.Results.Second; got != nil {
 		t.Errorf("got %#v, want nil", got)
 	}
+
 	if got, want := transport.salts, prfSalts(values); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -705,6 +778,7 @@ func TestGetAssertionPRFEvaluatesWithAlwaysUV(t *testing.T) {
 	callerOptions := map[protocol.Option]bool{protocol.OptionUserVerification: false}
 
 	var assertions []protocol.AuthenticatorGetAssertionResponse
+
 	for assertion, err := range d.GetAssertion(
 		testContext,
 		nil,
@@ -721,21 +795,26 @@ func TestGetAssertionPRFEvaluatesWithAlwaysUV(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		assertions = append(assertions, assertion)
 	}
 
 	if got, want := len(assertions), 1; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
 	}
+
 	if got := assertions[0].ExtensionOutputs.GetPRFOutputs; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
-	if got, want := assertions[0].ExtensionOutputs.GetPRFOutputs.PRF.Results.First, result; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
+
+	if got, want := assertions[0].ExtensionOutputs.PRF.Results.First, result; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := transport.salts, prfSalts(values); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got := callerOptions[protocol.OptionUserVerification]; got {
 		t.Errorf("got true, want false")
 	}
@@ -743,17 +822,21 @@ func TestGetAssertionPRFEvaluatesWithAlwaysUV(t *testing.T) {
 	if got, want := len(transport.requests), 2; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
 	}
+
 	if got, want := transport.requests[1][0], byte(protocol.AuthenticatorGetAssertion); got != want {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
+
 	var request protocol.AuthenticatorGetAssertionRequest
 	if err := cbor.Unmarshal(transport.requests[1][1:], &request); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := request.Options[protocol.OptionUserVerification]; got {
 		t.Errorf("got true, want false")
 	}
-	if got := request.Extensions.GetHMACSecretInput.HMACSecret.KeyAgreement; got == nil {
+
+	if got := request.Extensions.HMACSecret.KeyAgreement; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
 }
@@ -786,6 +869,7 @@ func TestGetAssertionPRFRejectsResultCountMismatch(t *testing.T) {
 	) {
 		gotErr = err
 	}
+
 	if err, target := gotErr, ErrSpecViolation; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
@@ -819,12 +903,15 @@ func TestGetAssertionPRFRequiresExplicitUserVerification(t *testing.T) {
 	) {
 		gotErr = err
 	}
+
 	if err, target := gotErr, ErrBuiltInUVRequired; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
+
 	if got := callerOptions[protocol.OptionUserVerification]; got {
 		t.Errorf("got true, want false")
 	}
+
 	assertNoAuthenticatorIO(t, fake)
 }
 
@@ -865,6 +952,7 @@ func TestPRFResultsRequireUserVerification(t *testing.T) {
 	) {
 		gotErr = err
 	}
+
 	if err, target := gotErr, ErrSpecViolation; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
@@ -889,6 +977,7 @@ func TestPRFPreflightFailuresPerformNoAuthenticatorIO(t *testing.T) {
 		if err, target := err, ErrNotSupported; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -919,9 +1008,11 @@ func TestPRFPreflightFailuresPerformNoAuthenticatorIO(t *testing.T) {
 		) {
 			gotErr = err
 		}
+
 		if err, target := gotErr, ErrNotSupported; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -952,9 +1043,11 @@ func TestPRFPreflightFailuresPerformNoAuthenticatorIO(t *testing.T) {
 		) {
 			gotErr = err
 		}
+
 		if err, target := gotErr, ErrPinUvAuthTokenRequired; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -973,6 +1066,7 @@ func TestPRFPreflightFailuresPerformNoAuthenticatorIO(t *testing.T) {
 		if err, target := err, ErrSpecViolation; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 }
@@ -1083,9 +1177,11 @@ func TestSelectCTAPGetPRFEvaluation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got := got; got == nil {
 			t.Fatalf("got nil, want a non-nil value")
 		}
+
 		if got, want := *got, first; (got.First == nil) != (want.First == nil) || !bytes.Equal(got.First, want.First) || ((got.Second == nil) != (want.Second == nil) || !bytes.Equal(got.Second, want.Second)) {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -1101,9 +1197,11 @@ func TestSelectCTAPGetPRFEvaluation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got := got; got == nil {
 			t.Fatalf("got nil, want a non-nil value")
 		}
+
 		if got, want := *got, first; (got.First == nil) != (want.First == nil) || !bytes.Equal(got.First, want.First) || ((got.Second == nil) != (want.Second == nil) || !bytes.Equal(got.Second, want.Second)) {
 			t.Errorf("got %#v, want %#v", got, want)
 		}

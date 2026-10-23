@@ -79,11 +79,8 @@ var _ ctaptransport.Device = (*Transport)(nil)
 // New selects the Token2 applet and returns an initialized transport. The
 // caller retains ownership of card if initialization fails.
 func New(ctx context.Context, card Card) (*Transport, error) {
-	if card == nil {
-		return nil, errors.New("token2: nil card")
-	}
-
 	t := &Transport{card: ioCard{Card: card}}
+
 	selectAPDU := slices.Concat([]byte{0x00, 0xa4, 0x04, 0x00, byte(len(appletAID))}, appletAID)
 	if _, err := t.exchange(ctx, selectAPDU); err != nil {
 		return nil, fmt.Errorf("token2: select applet: %w", err)
@@ -98,12 +95,14 @@ func (t *Transport) CBOR(ctx context.Context, data []byte) (ctaptransport.CBORRe
 	if len(data) < 1 {
 		return ctaptransport.CBORResponse{}, errors.New("token2: empty CTAP command")
 	}
+
 	if len(data) > maxCommandSize {
 		return ctaptransport.CBORResponse{}, ErrCommandTooLarge
 	}
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	if err := ctx.Err(); err != nil {
 		return ctaptransport.CBORResponse{}, err
 	}
@@ -112,13 +111,14 @@ func (t *Transport) CBOR(ctx context.Context, data []byte) (ctaptransport.CBORRe
 	if err != nil {
 		return ctaptransport.CBORResponse{}, t.closeOnIOError(ctx, err)
 	}
+
 	if len(response) < 1 {
 		return ctaptransport.CBORResponse{}, ErrInvalidResponse
 	}
 
 	return ctaptransport.ValidateCBORResponse(protocol.Command(data[0]), ctaptransport.CBORResponse{
 		StatusCode: ctaptransport.StatusCode(response[0]),
-		Data:       slices.Clone(response[1:]),
+		Data:       response[1:],
 	})
 }
 
@@ -133,6 +133,7 @@ func (t *Transport) closeOnIOError(ctx context.Context, err error) error {
 	}
 
 	_ = t.Close()
+
 	return &ctaptransport.DeviceInvalidatedError{Err: err}
 }
 
@@ -147,12 +148,14 @@ func commandAPDU(data []byte) []byte {
 
 func (t *Transport) exchange(ctx context.Context, apdu []byte) ([]byte, error) {
 	cla := apdu[0]
+
 	response, err := t.card.Transmit(ctx, apdu)
 	if err != nil {
 		return nil, err
 	}
 
 	var data []byte
+
 	for {
 		if len(response) < 2 {
 			return nil, ErrInvalidResponse
@@ -160,6 +163,7 @@ func (t *Transport) exchange(ctx context.Context, apdu []byte) ([]byte, error) {
 
 		body := response[:len(response)-2]
 		sw1, sw2 := response[len(response)-2], response[len(response)-1]
+
 		data = append(data, body...)
 
 		switch sw1 {
@@ -167,6 +171,7 @@ func (t *Transport) exchange(ctx context.Context, apdu []byte) ([]byte, error) {
 			if sw2 != 0x00 {
 				return nil, &APDUError{SW1: sw1, SW2: sw2}
 			}
+
 			return data, nil
 		case 0x61:
 			response, err = t.card.Transmit(ctx, []byte{cla, insGetResponse, 0x00, 0x00, sw2})
@@ -184,5 +189,6 @@ func (t *Transport) Close() error {
 	t.closeOnce.Do(func() {
 		t.closeErr = t.card.Close()
 	})
+
 	return t.closeErr
 }

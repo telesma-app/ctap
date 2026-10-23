@@ -8,8 +8,8 @@ github.com/ebitengine/purego v0.11.2 h1:WWiTx8rD8zYdOwSj8O/NiNbsOvSAgJMTlyV1XlbU
 github.com/ebitengine/purego v0.11.2/go.mod h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=
 github.com/fxamacker/cbor/v2 v2.9.6 h1:NHZPxuUjJXQjX9itA785y/5NKSlI4HQ+S7noZsmI7hs=
 github.com/fxamacker/cbor/v2 v2.9.6/go.mod h1:4EaZp6ClVunETjQ4GHmGNzysDK91Lr+r6Yz6tJqzVCw=
-github.com/telesma-app/hid v0.12.1 h1:vj0bH7FzFw+eYY7VuTWDeg5lXE90lLvf/CRLItUmR8w=
-github.com/telesma-app/hid v0.12.1/go.mod h1:bmzcOr5Fh1XVd/2Qn9VU0QIZkR3oFYnvnAb9NEqfqoY=
+github.com/telesma-app/hid v0.13.0 h1:bbuGvXEF/MJdne3YASJ+uMhjf46hcO7rxluwDOjEdWM=
+github.com/telesma-app/hid v0.13.0/go.mod h1:fvqpOxlVZAraPHWL3cgSNnY1Ib7UJbvv0KojIvGMQOI=
 github.com/telesma-app/iso7816 v0.2.0 h1:Ny8ErRKmFOJ6IUcOdvw/HKjGOXATa//LUx/GHXlxT/M=
 github.com/telesma-app/iso7816 v0.2.0/go.mod h1:oI7P4NERU4/SeBbou5UYg9vHiBvSC7QWF9PbLxcjxb4=
 github.com/telesma-app/pcsc v0.9.0 h1:vrirJ9xMgJyPF41lG3wg4Te7fmA+46bnenF4aswjV8w=

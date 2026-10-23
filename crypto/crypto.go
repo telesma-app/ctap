@@ -148,6 +148,7 @@ func OpenLargeBlob(key []byte, blob protocol.LargeBlob) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(blob.Nonce) != largeBlobNonceSize {
 		return nil, fmt.Errorf("invalid large blob nonce length: got %d, want %d", len(blob.Nonce), largeBlobNonceSize)
 	}
@@ -156,6 +157,7 @@ func OpenLargeBlob(key []byte, blob protocol.LargeBlob) ([]byte, error) {
 	binary.LittleEndian.PutUint64(origSizeBin, uint64(blob.OrigSize))
 
 	sealed := slices.Concat(blob.Nonce, blob.Ciphertext)
+
 	return gcm.Open(nil, nil, sealed, slices.Concat([]byte("blob"), origSizeBin))
 }
 
@@ -184,6 +186,7 @@ func EncryptLargeBlob(key []byte, origData []byte) (protocol.LargeBlob, error) {
 	binary.LittleEndian.PutUint64(origSizeBin, uint64(origSize))
 
 	sealed := gcm.Seal(nil, nil, plaintext, slices.Concat([]byte("blob"), origSizeBin))
+
 	return protocol.LargeBlob{
 		Ciphertext: sealed[largeBlobNonceSize:len(sealed):len(sealed)],
 		Nonce:      sealed[:largeBlobNonceSize:largeBlobNonceSize],

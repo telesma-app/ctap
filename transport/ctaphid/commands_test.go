@@ -25,12 +25,15 @@ func TestCBORSkipsKeepaliveBeforeSuccessResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := resp.StatusCode, ctaptransport.CTAP2_OK; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := resp.Data, response[1:]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	assertSingleReportRequest(t, dev.writes.Bytes(), cid, CTAPHID_CBOR, request)
 }
 
@@ -49,6 +52,7 @@ func TestCBORSkipsResponseForAnotherChannel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := resp.Data, response[1:]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -71,15 +75,19 @@ func TestCBORReturnsTypedCTAPError(t *testing.T) {
 	if got := errors.As(err, &ctapErr); !got {
 		t.Fatalf("got false, want true")
 	}
+
 	if got, want := ctapErr.Command, protocol.AuthenticatorGetInfo; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := ctapErr.StatusCode, ctaptransport.CTAP2_ERR_INVALID_CBOR; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if container, element := err.Error(), "AuthenticatorGetInfo failed"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	assertSingleReportRequest(t, dev.writes.Bytes(), cid, CTAPHID_CBOR, request)
 }
 
@@ -176,6 +184,7 @@ func TestInitAcceptsExtendedSuccessResponse(t *testing.T) {
 	// CTAP 2.3, section 11.2.9.1.3 requires accepting INIT responses longer than 17 bytes.
 	nonce := [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
 	allocatedCID := ChannelID{9, 8, 7, 6}
+
 	responseData := append([]byte{}, nonce[:]...)
 	responseData = append(responseData, allocatedCID[:]...)
 	responseData = append(responseData, 2, 3, 4, 5, byte(CAPABILITY_WINK)|byte(CAPABILITY_CBOR))
@@ -189,30 +198,39 @@ func TestInitAcceptsExtendedSuccessResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := resp.Nonce, nonce; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := resp.CID, allocatedCID; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := resp.CTAPHIDProtocolVersionIdentifier, byte(2); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := resp.MajorDeviceVersion, byte(3); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := resp.MinorDeviceVersion, byte(4); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := resp.BuildDeviceVersion, byte(5); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got := resp.ImplementsWink(); !got {
 		t.Errorf("got false, want true")
 	}
+
 	if got := resp.ImplementsCBOR(); !got {
 		t.Errorf("got false, want true")
 	}
+
 	if got := resp.NotImplementsMSG(); got {
 		t.Errorf("got true, want false")
 	}
@@ -223,6 +241,7 @@ func TestInitAcceptsExtendedSuccessResponse(t *testing.T) {
 func TestInitSkipsAnotherClientResponse(t *testing.T) {
 	nonce := [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
 	otherResponse := []byte{8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 2, 3, 4, 5, byte(CAPABILITY_CBOR)}
+
 	response := append([]byte{}, nonce[:]...)
 	response = append(response, 9, 8, 7, 6, 2, 3, 4, 5, byte(CAPABILITY_CBOR))
 	reads := bytes.NewBuffer(nil)
@@ -257,9 +276,11 @@ func TestPingSkipsKeepaliveBeforeSuccessResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := resp.Bytes, data; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	assertSingleReportRequest(t, dev.writes.Bytes(), cid, CTAPHID_PING, data)
 }
 
@@ -271,6 +292,7 @@ func TestCancelWritesRequestAndDoesNotReadResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	assertSingleReportRequest(t, dev.writes.Bytes(), cid, CTAPHID_CANCEL, nil)
 }
 
@@ -284,6 +306,7 @@ func TestWinkWritesRequestAndAcceptsEmptySuccessResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	assertSingleReportRequest(t, dev.writes.Bytes(), cid, CTAPHID_WINK, nil)
 }
 
@@ -295,9 +318,11 @@ func TestLockRejectsInvalidDuration(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if got := errors.Is(err, ErrInvalidRequestMessage); !got {
 		t.Errorf("got false, want true")
 	}
+
 	if got := dev.writes.Bytes(); len(got) != 0 {
 		t.Errorf("got non-empty value %#v", got)
 	}
@@ -313,5 +338,6 @@ func TestLockWritesDurationAndAcceptsEmptySuccessResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	assertSingleReportRequest(t, dev.writes.Bytes(), cid, CTAPHID_LOCK, []byte{10})
 }

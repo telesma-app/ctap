@@ -16,6 +16,7 @@ func withContextIO(ctx context.Context, conn io.Closer, operation func() error) 
 	done := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
 		_ = conn.Close()
+
 		close(done)
 	})
 
@@ -25,5 +26,6 @@ func withContextIO(ctx context.Context, conn io.Closer, operation func() error) 
 	}
 
 	<-done
+
 	return ctx.Err()
 }

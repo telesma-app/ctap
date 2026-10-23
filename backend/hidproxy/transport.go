@@ -28,6 +28,7 @@ func enumerate(
 				if !yield(nil, err) {
 					return
 				}
+
 				continue
 			}
 
@@ -36,8 +37,10 @@ func enumerate(
 				if !yield(nil, err) {
 					return
 				}
+
 				continue
 			}
+
 			if !yield(transport, nil) {
 				return
 			}

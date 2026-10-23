@@ -31,6 +31,7 @@ func TestCompressDecompress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := decompressed, origDataForCompress; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -46,6 +47,7 @@ func TestCompressDecompressLargeBlobData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := decompressed, origDataForCompress; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -54,6 +56,7 @@ func TestCompressDecompressLargeBlobData(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "orig size mismatch"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -74,6 +77,7 @@ func TestLargeBlobDataSizeLimit(t *testing.T) {
 func TestEncryptDecryptLargeBlob(t *testing.T) {
 	encKey := make([]byte, 32)
 	r := mrand.New(mrand.NewSource(42))
+
 	_, err := r.Read(encKey)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -83,12 +87,15 @@ func TestEncryptDecryptLargeBlob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := encryptedBlob.OrigSize, uint(len(origData)); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := len(encryptedBlob.Nonce), 12; got != want {
 		t.Errorf("got length %d, want %d", got, want)
 	}
+
 	if got := encryptedBlob.Ciphertext; len(got) == 0 {
 		t.Errorf("got empty value %#v, want non-empty", got)
 	}
@@ -106,10 +113,12 @@ func TestEncryptDecryptLargeBlob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	openedOrigData, err := DecompressLargeBlobData(compressed, encryptedBlob.OrigSize)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := openedOrigData, origData; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -135,6 +144,7 @@ func TestDecryptLargeBlobLegacyWireVector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecryptLargeBlob: %v", err)
 	}
+
 	want := []byte("legacy CTAP large-blob wire vector")
 	if !bytes.Equal(got, want) {
 		t.Fatalf("DecryptLargeBlob = %x, want %x", got, want)
@@ -143,12 +153,14 @@ func TestDecryptLargeBlobLegacyWireVector(t *testing.T) {
 
 func TestDecryptLargeBlobRejectsTampering(t *testing.T) {
 	encKey := deterministicBytes(t, 32, 42)
+
 	encryptedBlob, err := EncryptLargeBlob(encKey, origData)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	wrongKey := deterministicBytes(t, 32, 43)
+
 	_, err = DecryptLargeBlob(wrongKey, encryptedBlob)
 	if err == nil {
 		t.Fatalf("expected an error")
@@ -156,6 +168,7 @@ func TestDecryptLargeBlobRejectsTampering(t *testing.T) {
 
 	tamperedNonce := cloneLargeBlob(encryptedBlob)
 	tamperedNonce.Nonce[0] ^= 0xff
+
 	_, err = DecryptLargeBlob(encKey, tamperedNonce)
 	if err == nil {
 		t.Fatalf("expected an error")
@@ -163,6 +176,7 @@ func TestDecryptLargeBlobRejectsTampering(t *testing.T) {
 
 	tamperedCiphertext := cloneLargeBlob(encryptedBlob)
 	tamperedCiphertext.Ciphertext[0] ^= 0xff
+
 	_, err = DecryptLargeBlob(encKey, tamperedCiphertext)
 	if err == nil {
 		t.Fatalf("expected an error")
@@ -170,6 +184,7 @@ func TestDecryptLargeBlobRejectsTampering(t *testing.T) {
 
 	tamperedOrigSize := cloneLargeBlob(encryptedBlob)
 	tamperedOrigSize.OrigSize++
+
 	_, err = DecryptLargeBlob(encKey, tamperedOrigSize)
 	if err == nil {
 		t.Fatalf("expected an error")
@@ -183,6 +198,7 @@ func TestLargeBlobRejectsInvalidKeyLength(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "large blob key length"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -191,6 +207,7 @@ func TestLargeBlobRejectsInvalidKeyLength(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "large blob key length"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -198,16 +215,19 @@ func TestLargeBlobRejectsInvalidKeyLength(t *testing.T) {
 
 func TestDecryptLargeBlobRejectsInvalidNonceLength(t *testing.T) {
 	encKey := deterministicBytes(t, 32, 42)
+
 	encryptedBlob, err := EncryptLargeBlob(encKey, origData)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	encryptedBlob.Nonce = encryptedBlob.Nonce[:len(encryptedBlob.Nonce)-1]
 
 	_, err = DecryptLargeBlob(encKey, encryptedBlob)
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "nonce length"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -221,6 +241,7 @@ func TestDecryptLargeBlobRejectsMismatchedDecompressedSize(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "orig size mismatch"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -242,11 +263,14 @@ func TestPinUvAuthProtocolEncapsulateAndEncryptDecrypt(t *testing.T) {
 				if !errors.Is(err, ctapfips140.ErrNotAllowed) {
 					t.Fatalf("error = %v, want errors.Is(error, %v)", err, ctapfips140.ErrNotAllowed)
 				}
+
 				return
 			}
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			authenticator, err := NewPinUvAuthProtocol(tc.protocol)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -256,13 +280,16 @@ func TestPinUvAuthProtocolEncapsulateAndEncryptDecrypt(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got, want := len(sharedSecret), tc.sharedSecretLen; got != want {
 				t.Fatalf("got length %d, want %d", got, want)
 			}
+
 			algorithm, ok := platformPublicKey[cose.KeyParameterAlg].(cose.Algorithm)
 			if !ok || algorithm != cose.AlgorithmECDHESHKDF256 {
 				t.Errorf("got platform key algorithm %#v, want %d", platformPublicKey[cose.KeyParameterAlg], cose.AlgorithmECDHESHKDF256)
 			}
+
 			if got, want := len(platformPublicKey), 5; got != want {
 				t.Fatalf("got length %d, want %d", got, want)
 			}
@@ -271,15 +298,18 @@ func TestPinUvAuthProtocolEncapsulateAndEncryptDecrypt(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got, want := authenticatorSharedSecret, sharedSecret; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 				t.Errorf("got %#v, want %#v", got, want)
 			}
 
 			plaintext := []byte("16-byte block...")
+
 			ciphertext, err := platform.Encrypt(sharedSecret, plaintext)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got, want := len(ciphertext), tc.ciphertextLen; got != want {
 				t.Fatalf("got length %d, want %d", got, want)
 			}
@@ -288,6 +318,7 @@ func TestPinUvAuthProtocolEncapsulateAndEncryptDecrypt(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got, want := decrypted, plaintext; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 				t.Errorf("got %#v, want %#v", got, want)
 			}
@@ -304,6 +335,7 @@ func TestNewPinUvAuthProtocolFIPS140Policy(t *testing.T) {
 	if !errors.Is(err, ctapfips140.ErrNotAllowed) {
 		t.Fatalf("error = %v, want errors.Is(error, %v)", err, ctapfips140.ErrNotAllowed)
 	}
+
 	if _, err := NewPinUvAuthProtocol(protocol.PinUvAuthProtocolTwo); err != nil {
 		t.Fatalf("protocol 2 rejected: %v", err)
 	}
@@ -316,6 +348,7 @@ func TestPinUvAuthProtocolRejectsInvalidProtocol(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if got := errors.Is(err, ErrInvalidAuthProtocol); !got {
 		t.Errorf("got false, want true")
 	}
@@ -324,6 +357,7 @@ func TestPinUvAuthProtocolRejectsInvalidProtocol(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if got := errors.Is(err, ErrInvalidAuthProtocol); !got {
 		t.Errorf("got false, want true")
 	}
@@ -332,6 +366,7 @@ func TestPinUvAuthProtocolRejectsInvalidProtocol(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if got := errors.Is(err, ErrInvalidAuthProtocol); !got {
 		t.Errorf("got false, want true")
 	}
@@ -351,6 +386,7 @@ func TestAuthenticateDispatchesByProtocol(t *testing.T) {
 	if got, want := len(protocolTwoMAC), 32; got != want {
 		t.Errorf("got length %d, want %d", got, want)
 	}
+
 	if got, want := protocolTwoMAC, Authenticate(protocol.PinUvAuthProtocolTwo, sharedSecret32, message); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -361,19 +397,23 @@ func deterministicBytes(t *testing.T, n int, seed int64) []byte {
 
 	b := make([]byte, n)
 	r := mrand.New(mrand.NewSource(seed))
+
 	_, err := r.Read(b)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return b
 }
 
 func mustDecodeTestHex(t testing.TB, value string) []byte {
 	t.Helper()
+
 	decoded, err := hex.DecodeString(value)
 	if err != nil {
 		t.Fatalf("decode hex: %v", err)
 	}
+
 	return decoded
 }
 
@@ -397,6 +437,7 @@ func encryptLargeBlobWithOrigSize(t *testing.T, key []byte, origData []byte, ori
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	gcm, err := cipher.NewGCMWithRandomNonce(block)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

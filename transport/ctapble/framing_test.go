@@ -16,6 +16,7 @@ func TestFragmentFrameMaxLen20(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	want := [][]byte{
 		append([]byte{0x81, 0x00, 0x28}, data[:17]...),
 		append([]byte{0x00}, data[17:36]...),
@@ -24,6 +25,7 @@ func TestFragmentFrameMaxLen20(t *testing.T) {
 	if len(fragments) != len(want) {
 		t.Fatalf("got %d fragments, want %d", len(fragments), len(want))
 	}
+
 	for i := range want {
 		if !bytes.Equal(fragments[i], want[i]) {
 			t.Errorf("fragment %d = %x, want %x", i, fragments[i], want[i])
@@ -33,13 +35,16 @@ func TestFragmentFrameMaxLen20(t *testing.T) {
 
 func TestFragmentFrameMaxLen512(t *testing.T) {
 	data := make([]byte, 400)
+
 	fragments, err := fragmentFrame(PING, data, 512)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(fragments) != 1 {
 		t.Fatalf("got %d fragments, want 1", len(fragments))
 	}
+
 	if got, want := fragments[0][:3], []byte{0x81, 0x01, 0x90}; !bytes.Equal(got, want) {
 		t.Fatalf("header = %x, want %x", got, want)
 	}
@@ -50,6 +55,7 @@ func TestFragmentFrameEmptyData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got, want := fragments[0], []byte{0xbe, 0x00, 0x00}; !bytes.Equal(got, want) {
 		t.Fatalf("fragment = %x, want %x", got, want)
 	}
@@ -57,13 +63,16 @@ func TestFragmentFrameEmptyData(t *testing.T) {
 
 func TestSequenceWrapsAfter7F(t *testing.T) {
 	data := make([]byte, 17+129*19)
+
 	fragments, err := fragmentFrame(MSG, data, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if got := fragments[128][0]; got != 0x7f {
 		t.Fatalf("last sequence = 0x%02x, want 0x7f", got)
 	}
+
 	if got := fragments[129][0]; got != 0x00 {
 		t.Fatalf("wrapped sequence = 0x%02x, want 0x00", got)
 	}
@@ -75,14 +84,17 @@ func TestAssembleFragmentedResponseFrame(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var assembler responseFrameAssembler
-	var frame *responseFrame
+	var (
+		assembler responseFrameAssembler
+		frame     *responseFrame
+	)
 	for _, fragment := range fragments {
 		frame, err = assembler.addFragment(fragment)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
+
 	if frame == nil || frame.status != MSG || string(frame.data) != "fragmented response" {
 		t.Fatalf("frame = %#v", frame)
 	}
@@ -103,14 +115,17 @@ func TestResponseFrameAssemblerRejectsMalformedFragments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var assembler responseFrameAssembler
-			var err error
+			var (
+				assembler responseFrameAssembler
+				err       error
+			)
 			for _, fragment := range tt.fragments {
 				_, err = assembler.addFragment(fragment)
 				if err != nil {
 					break
 				}
 			}
+
 			if !errors.Is(err, ErrInvalidFrame) {
 				t.Fatalf("error = %v, want ErrInvalidFrame", err)
 			}
@@ -123,6 +138,7 @@ func TestDecodeErrorCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if code != ERR_OTHER {
 		t.Fatalf("code = 0x%x", code)
 	}

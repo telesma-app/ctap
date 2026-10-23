@@ -66,21 +66,25 @@ func (cl *Client) MakeCredential(
 	if err := validateClientDataHash(clientDataHash); err != nil {
 		return protocol.AuthenticatorMakeCredentialResponse{}, err
 	}
+
 	pubKeyCredParams, err := fips140policy.FilterCredentialParameters(pubKeyCredParams)
 	if err != nil {
 		return protocol.AuthenticatorMakeCredentialResponse{}, err
 	}
+
 	var requestExtensions protocol.CreateExtensionInputs
 	if extensions != nil {
 		requestExtensions = *extensions
 	}
+
 	previewSignAlgorithms, err := fips140policy.FilterPreviewSignAlgorithms(
-		requestExtensions.CreatePreviewSignInput.PreviewSign.Algorithms,
+		requestExtensions.PreviewSign.Algorithms,
 	)
 	if err != nil {
 		return protocol.AuthenticatorMakeCredentialResponse{}, err
 	}
-	requestExtensions.CreatePreviewSignInput.PreviewSign.Algorithms = previewSignAlgorithms
+
+	requestExtensions.PreviewSign.Algorithms = previewSignAlgorithms
 	if fips140.Enabled() {
 		if err := validateFIPS140HMACSecret(requestExtensions.CreateHMACSecretMCInput.HMACSecret); err != nil {
 			return protocol.AuthenticatorMakeCredentialResponse{}, err
@@ -128,15 +132,18 @@ func (cl *Client) MakeCredential(
 	if err := cl.decMode.Unmarshal(respRaw.Data, &resp); err != nil {
 		return protocol.AuthenticatorMakeCredentialResponse{}, err
 	}
+
 	authData, err := protocol.ParseMakeCredentialAuthData(resp.AuthDataRaw)
 	if err != nil {
 		return protocol.AuthenticatorMakeCredentialResponse{}, err
 	}
+
 	if authData.AttestedCredentialData != nil {
 		if err := fips140policy.ValidateCredentialKey(authData.AttestedCredentialData.CredentialPublicKey); err != nil {
 			return protocol.AuthenticatorMakeCredentialResponse{}, err
 		}
 	}
+
 	resp.AuthData = &authData
 
 	return resp, nil
@@ -157,8 +164,9 @@ func (cl *Client) GetAssertion(
 			yield(protocol.AuthenticatorGetAssertionResponse{}, err)
 			return
 		}
+
 		if fips140.Enabled() && extensions != nil {
-			if err := validateFIPS140HMACSecret(extensions.GetHMACSecretInput.HMACSecret); err != nil {
+			if err := validateFIPS140HMACSecret(extensions.HMACSecret); err != nil {
 				yield(protocol.AuthenticatorGetAssertionResponse{}, err)
 				return
 			}
@@ -210,11 +218,13 @@ func (cl *Client) GetAssertion(
 			yield(protocol.AuthenticatorGetAssertionResponse{}, err)
 			return
 		}
+
 		authData, err := protocol.ParseGetAssertionAuthData(respBegin.AuthDataRaw)
 		if err != nil {
 			yield(protocol.AuthenticatorGetAssertionResponse{}, err)
 			return
 		}
+
 		respBegin.AuthData = &authData
 
 		if !yield(respBegin, nil) {
@@ -237,11 +247,13 @@ func (cl *Client) GetAssertion(
 				yield(protocol.AuthenticatorGetAssertionResponse{}, err)
 				return
 			}
+
 			authData, err := protocol.ParseGetAssertionAuthData(resp.AuthDataRaw)
 			if err != nil {
 				yield(protocol.AuthenticatorGetAssertionResponse{}, err)
 				return
 			}
+
 			resp.AuthData = &authData
 
 			if !yield(resp, nil) {
@@ -380,6 +392,7 @@ func encryptNewPIN(
 ) ([]byte, error) {
 	pinBytes := make([]byte, 64)
 	defer clear(pinBytes)
+
 	copy(pinBytes, pin)
 
 	return pinProtocol.Encrypt(sharedSecret, pinBytes)
@@ -392,6 +405,7 @@ func encryptPINHash(
 ) ([]byte, error) {
 	pinBytes := []byte(pin)
 	defer clear(pinBytes)
+
 	pinHash := sha256.Sum256(pinBytes)
 	defer clear(pinHash[:])
 
@@ -424,6 +438,7 @@ func (cl *Client) SetPIN(
 	if err != nil {
 		return err
 	}
+
 	pinUvAuthParam := crypto.Authenticate(
 		pinUvAuthProtocol,
 		sharedSecret,
@@ -462,6 +477,7 @@ func (cl *Client) ChangePIN(
 	if err != nil {
 		return err
 	}
+
 	newPin, err = pinvalidation.NormalizeAndValidate(newPin, protocol.DefaultMinPINCodePoints)
 	if err != nil {
 		return err
@@ -487,6 +503,7 @@ func (cl *Client) ChangePIN(
 	if err != nil {
 		return err
 	}
+
 	pinUvAuthParam := crypto.Authenticate(
 		pinUvAuthProtocol,
 		sharedSecret,
@@ -793,6 +810,7 @@ func (cl *Client) EnrollBegin(
 	if err != nil {
 		return protocol.AuthenticatorBioEnrollmentResponse{}, err
 	}
+
 	if timeoutMilliseconds == 0 {
 		bSubCommandParams = nil
 	}
@@ -1463,6 +1481,7 @@ func (cl *Client) LargeBlobs(
 	if set == nil || get != 0 {
 		getParam = &get
 	}
+
 	req := &protocol.AuthenticatorLargeBlobsRequest{
 		Get:    getParam,
 		Set:    set,
@@ -1531,6 +1550,7 @@ func (cl *Client) EnableEnterpriseAttestation(
 	req := &protocol.AuthenticatorConfigRequest{
 		SubCommand: protocol.ConfigSubCommandEnableEnterpriseAttestation,
 	}
+
 	if pinUvAuthToken != nil {
 		if err := pinvalidation.ValidateUvAuthToken(pinUvAuthProtocol, pinUvAuthToken); err != nil {
 			return err
@@ -1572,6 +1592,7 @@ func (cl *Client) ToggleAlwaysUV(
 	req := &protocol.AuthenticatorConfigRequest{
 		SubCommand: protocol.ConfigSubCommandToggleAlwaysUv,
 	}
+
 	if pinUvAuthToken != nil {
 		if err := pinvalidation.ValidateUvAuthToken(pinUvAuthProtocol, pinUvAuthToken); err != nil {
 			return err
@@ -1613,6 +1634,7 @@ func (cl *Client) SetMinPINLength(
 	params protocol.SetMinPINLengthConfigSubCommandParams,
 ) error {
 	subCommandParams := &params
+
 	bSubCommandParams, err := cl.encMode.Marshal(subCommandParams)
 	if err != nil {
 		return err
@@ -1622,6 +1644,7 @@ func (cl *Client) SetMinPINLength(
 		SubCommand:       protocol.ConfigSubCommandSetMinPINLength,
 		SubCommandParams: subCommandParams,
 	}
+
 	if pinUvAuthToken != nil {
 		if err := pinvalidation.ValidateUvAuthToken(pinUvAuthProtocol, pinUvAuthToken); err != nil {
 			return err
@@ -1665,6 +1688,7 @@ func (cl *Client) EnableLongTouchForReset(
 	req := &protocol.AuthenticatorConfigRequest{
 		SubCommand: protocol.ConfigSubCommandEnableLongTouchForReset,
 	}
+
 	if pinUvAuthToken != nil {
 		if err := pinvalidation.ValidateUvAuthToken(pinUvAuthProtocol, pinUvAuthToken); err != nil {
 			return err

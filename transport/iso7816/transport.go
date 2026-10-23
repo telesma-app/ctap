@@ -56,8 +56,10 @@ func (t *Transport) Close() error {
 	t.closeOnce.Do(func() {
 		if t.mu.TryLock() {
 			defer t.mu.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
+
 			t.closeErr = Deselect(ctx, t.card)
 		}
 
@@ -65,6 +67,7 @@ func (t *Transport) Close() error {
 		if closeErr != nil {
 			closeErr = &ctaptransport.IOError{Operation: ctaptransport.IOClose, Err: closeErr}
 		}
+
 		t.closeErr = errors.Join(t.closeErr, closeErr)
 	})
 

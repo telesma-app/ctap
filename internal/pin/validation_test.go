@@ -30,14 +30,17 @@ func TestValidateUvAuthToken(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateUvAuthToken(tt.protocol, make([]byte, tt.length))
+
 			fipsRejected := cryptofips140.Enabled() && tt.protocol != protocol.PinUvAuthProtocolTwo
 			if tt.wantErr || fipsRejected {
 				if err == nil {
 					t.Fatalf("expected an error")
 				}
+
 				if fipsRejected && !errors.Is(err, ctapfips140.ErrNotAllowed) {
 					t.Fatalf("error = %v, want errors.Is(error, %v)", err, ctapfips140.ErrNotAllowed)
 				}
+
 				return
 			}
 
@@ -57,6 +60,7 @@ func TestValidateFIPS140UvAuthProtocol(t *testing.T) {
 	if !errors.Is(err, ctapfips140.ErrNotAllowed) {
 		t.Fatalf("error = %v, want errors.Is(error, %v)", err, ctapfips140.ErrNotAllowed)
 	}
+
 	if err := ValidateFIPS140UvAuthProtocol(protocol.PinUvAuthProtocolTwo); err != nil {
 		t.Fatalf("protocol 2 rejected: %v", err)
 	}
@@ -68,6 +72,7 @@ func TestNormalizeAndValidate(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected an error")
 		}
+
 		if container, element := err.Error(), "at least 6"; !strings.Contains(container, element) {
 			t.Errorf("value does not contain %#v", element)
 		}
@@ -78,6 +83,7 @@ func TestNormalizeAndValidate(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected an error")
 		}
+
 		if container, element := err.Error(), "63 UTF-8 bytes"; !strings.Contains(container, element) {
 			t.Errorf("value does not contain %#v", element)
 		}
@@ -88,6 +94,7 @@ func TestNormalizeAndValidate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := value, "Caf\u00e9123"; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -98,6 +105,7 @@ func TestNormalizeAndValidate(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected an error")
 		}
+
 		if container, element := err.Error(), "0x00"; !strings.Contains(container, element) {
 			t.Errorf("value does not contain %#v", element)
 		}

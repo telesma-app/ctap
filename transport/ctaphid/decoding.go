@@ -6,17 +6,21 @@ import (
 )
 
 func (m *Message) ReadFrom(device io.Reader) (int64, error) {
-	var bytesRead int
-	var expectedCID ChannelID
-	var expectedSequence byte
+	var (
+		bytesRead        int
+		expectedCID      ChannelID
+		expectedSequence byte
+	)
 
 	total := -1
 	for total != 0 {
 		rawPacket := make([]byte, hidPacketSize)
+
 		n, err := io.ReadFull(device, rawPacket)
 		if err != nil {
 			return 0, err
 		}
+
 		bytesRead += n
 
 		var p packet
@@ -29,6 +33,7 @@ func (m *Message) ReadFrom(device io.Reader) (int64, error) {
 			if total >= 0 {
 				return 0, ErrInvalidResponseMessage
 			}
+
 			p.command = Command(cmdOrSeq & ^INIT_PACKET_BIT)
 			p.length = binary.BigEndian.Uint16(rawPacket[5:7])
 			total = int(p.length)
@@ -46,6 +51,7 @@ func (m *Message) ReadFrom(device io.Reader) (int64, error) {
 			if total < 0 {
 				return 0, ErrInvalidResponseMessage
 			}
+
 			if p.cid != expectedCID || cmdOrSeq != expectedSequence {
 				return 0, ErrInvalidResponseMessage
 			}

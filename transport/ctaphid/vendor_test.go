@@ -19,6 +19,7 @@ func TestVendorRejectsNonVendorCommand(t *testing.T) {
 func TestVendorReturnsCTAPHIDError(t *testing.T) {
 	cid := ctaphid.ChannelID{1, 2, 3, 4}
 	fake := testhid.New(t, testhid.CTAPHIDError(cid, ctaphid.ERR_INVALID_CMD))
+
 	_, err := ctaphid.Vendor(context.Background(), fake, cid, ctaphid.CTAPHID_VENDOR_FIRST, nil)
 	if err == nil {
 		t.Fatalf("expected an error")
@@ -28,6 +29,7 @@ func TestVendorReturnsCTAPHIDError(t *testing.T) {
 	if err := err; !errors.As(err, &response) {
 		t.Fatalf("error %v does not match requested type", err)
 	}
+
 	if got, want := response.ErrorCode, ctaphid.ERR_INVALID_CMD; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}

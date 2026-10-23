@@ -27,6 +27,7 @@ func Devices(ctx context.Context) iter.Seq2[*ghid.DeviceInfo, error] {
 				yield(nil, err)
 				return
 			}
+
 			if !yield(info, err) {
 				return
 			}
@@ -50,6 +51,7 @@ func enumerate(
 				if !yield(nil, err) {
 					return
 				}
+
 				continue
 			}
 
@@ -58,8 +60,10 @@ func enumerate(
 				if !yield(nil, err) {
 					return
 				}
+
 				continue
 			}
+
 			if !yield(transport, nil) {
 				return
 			}

@@ -54,7 +54,9 @@ func authDataWithExtensionOutputs(t *testing.T, outputs any) []byte {
 	if _, ok := outputs.(protocol.CreateExtensionOutputs); ok {
 		authData = minimalMakeCredentialAuthData(t)
 	}
+
 	authData[32] |= byte(protocol.AuthDataFlagExtensionDataIncluded)
+
 	return append(authData, encodeCBOR(t, outputs)...)
 }
 
@@ -77,6 +79,7 @@ func TestMakeCredentialVerifiesEnforcedCredentialProtectionOutput(t *testing.T) 
 					CreateCredProtectOutput: protocol.CreateCredProtectOutput{CredProtect: *tt.output},
 				})
 			}
+
 			response := encodeCBOR(t, &protocol.AuthenticatorMakeCredentialResponse{
 				Format:      attestation.AttestationStatementFormatIdentifierPacked,
 				AuthDataRaw: authData,
@@ -104,6 +107,7 @@ func TestMakeCredentialVerifiesEnforcedCredentialProtectionOutput(t *testing.T) 
 					t.Fatalf("unexpected error: %v", err)
 				}
 			}
+
 			if got := fake.Writes(); len(got) == 0 {
 				t.Errorf("got empty value %#v, want non-empty", got)
 			}
@@ -141,10 +145,12 @@ func TestMakeCredentialIgnoresOversizedCredentialBlob(t *testing.T) {
 	if got, want := command, protocol.AuthenticatorMakeCredential; got != want {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
+
 	var request protocol.AuthenticatorMakeCredentialRequest
 	if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := request.Extensions.CreateCredBlobInput; got.CredBlob != nil {
 		t.Errorf("got %#v, want zero value", got)
 	}
@@ -176,19 +182,24 @@ func TestFalseBooleanExtensionInputsAreNotProcessed(t *testing.T) {
 		}
 
 		_, requestCBOR := fake.FirstCTAPPayload(t)
+
 		var request protocol.AuthenticatorMakeCredentialRequest
 		if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got := request.Extensions.CreateHMACSecretInput; got.HMACSecret {
 			t.Errorf("got %#v, want zero value", got)
 		}
+
 		if got := request.Extensions.CreateMinPinLengthInput; got.MinPinLength {
 			t.Errorf("got %#v, want zero value", got)
 		}
+
 		if got := request.Extensions.CreatePinComplexityPolicyInput; got.PinComplexityPolicy {
 			t.Errorf("got %#v, want zero value", got)
 		}
+
 		if got := request.Extensions.CreateThirdPartyPaymentInput; got.ThirdPartyPayment {
 			t.Errorf("got %#v, want zero value", got)
 		}
@@ -218,22 +229,27 @@ func TestFalseBooleanExtensionInputsAreNotProcessed(t *testing.T) {
 			nil,
 		) {
 			count++
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		}
+
 		if got, want := count, 1; got != want {
 			t.Fatalf("got %#v, want %#v", got, want)
 		}
 
 		_, requestCBOR := fake.FirstCTAPPayload(t)
+
 		var request protocol.AuthenticatorGetAssertionRequest
 		if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got := request.Extensions.GetCredBlobInput; got.CredBlob {
 			t.Errorf("got %#v, want zero value", got)
 		}
+
 		if got := request.Extensions.GetThirdPartyPaymentInput; got.ThirdPartyPayment {
 			t.Errorf("got %#v, want zero value", got)
 		}
@@ -267,11 +283,13 @@ func TestThirdPartyPaymentExtension(t *testing.T) {
 		if got, want := command, protocol.AuthenticatorMakeCredential; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
+
 		var request protocol.AuthenticatorMakeCredentialRequest
 		if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got := request.Extensions.CreateThirdPartyPaymentInput.ThirdPartyPayment; !got {
+
+		if got := request.Extensions.ThirdPartyPayment; !got {
 			t.Errorf("got false, want true")
 		}
 	})
@@ -289,6 +307,7 @@ func TestThirdPartyPaymentExtension(t *testing.T) {
 		})
 
 		var assertions []protocol.AuthenticatorGetAssertionResponse
+
 		for assertion, err := range d.GetAssertion(
 			testContext,
 			nil,
@@ -305,15 +324,19 @@ func TestThirdPartyPaymentExtension(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			assertions = append(assertions, assertion)
 		}
+
 		if got, want := len(assertions), 1; got != want {
 			t.Fatalf("got length %d, want %d", got, want)
 		}
+
 		if got := assertions[0].AuthData.Extensions.GetThirdPartyPaymentOutput; got == nil {
 			t.Fatalf("got nil, want a non-nil value")
 		}
-		if got := assertions[0].AuthData.Extensions.GetThirdPartyPaymentOutput.ThirdPartyPayment; got {
+
+		if got := assertions[0].AuthData.Extensions.ThirdPartyPayment; got {
 			t.Errorf("got true, want false")
 		}
 
@@ -321,11 +344,13 @@ func TestThirdPartyPaymentExtension(t *testing.T) {
 		if got, want := command, protocol.AuthenticatorGetAssertion; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
+
 		var request protocol.AuthenticatorGetAssertionRequest
 		if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got := request.Extensions.GetThirdPartyPaymentInput.ThirdPartyPayment; !got {
+
+		if got := request.Extensions.ThirdPartyPayment; !got {
 			t.Errorf("got false, want true")
 		}
 	})
@@ -346,6 +371,7 @@ func TestThirdPartyPaymentExtension(t *testing.T) {
 		if err, target := err, ErrNotSupported; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 }
@@ -404,6 +430,7 @@ func TestCompositeExtensionCapabilitiesAreValidatedBeforeCommand(t *testing.T) {
 			if err, target := err, ErrSpecViolation; !errors.Is(err, target) {
 				t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 			}
+
 			assertNoAuthenticatorIO(t, fake)
 		})
 	}
@@ -435,6 +462,7 @@ func TestGetAssertionRejectsHMACSecretWhenUserPresenceIsDisabledBeforeCommand(t 
 	if err, target := gotErr, ErrNotSupported; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
+
 	assertNoAuthenticatorIO(t, fake)
 }
 
@@ -481,6 +509,7 @@ func TestUnsolicitedExtensionOutputsAreRejectedWithoutPanic(t *testing.T) {
 		) {
 			gotErr = err
 		}
+
 		if err, target := gotErr, ErrSpecViolation; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
@@ -508,6 +537,7 @@ func TestSetLargeBlobsValidatesAndCanonicalizesArray(t *testing.T) {
 			if err, target := err, SyntaxError; !errors.Is(err, target) {
 				t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 			}
+
 			assertNoAuthenticatorIO(t, fake)
 		}
 	})
@@ -521,16 +551,20 @@ func TestSetLargeBlobsValidatesAndCanonicalizesArray(t *testing.T) {
 		}
 
 		_, requestCBOR := fake.FirstCTAPPayload(t)
+
 		var request protocol.AuthenticatorLargeBlobsRequest
 		if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := len(request.Set), 17; got != want {
 			t.Fatalf("got length %d, want %d", got, want)
 		}
+
 		if got, want := request.Set[0], byte(0x80); got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
+
 		hash := sha256.Sum256(request.Set[:1])
 		if got, want := request.Set[1:], hash[:16]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 			t.Errorf("got %#v, want %#v", got, want)
@@ -572,12 +606,15 @@ func TestGetAssertionValidatesHMACSecretSalts(t *testing.T) {
 		nil,
 	) {
 		count++
+
 		if !assertionResponseIsZero(assertion) {
 			t.Errorf("got %#v, want zero response", assertion)
 		}
+
 		if err == nil {
 			t.Fatalf("expected an error")
 		}
+
 		if got := errors.Is(err, ErrInvalidSaltSize); !got {
 			t.Errorf("got false, want true")
 		}
@@ -586,6 +623,7 @@ func TestGetAssertionValidatesHMACSecretSalts(t *testing.T) {
 	if got, want := count, 1; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	assertNoAuthenticatorIO(t, fake)
 }
 
@@ -624,9 +662,11 @@ func TestMakeCredentialValidatesHMACSecretMCSalts(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if got := errors.Is(err, ErrInvalidSaltSize); !got {
 		t.Errorf("got false, want true")
 	}
+
 	assertNoAuthenticatorIO(t, fake)
 }
 
@@ -662,6 +702,7 @@ func TestMakeCredentialAllowsFIDO20BuiltInUV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := fake.Writes(); len(got) == 0 {
 		t.Errorf("got empty value %#v, want non-empty", got)
 	}
@@ -701,13 +742,16 @@ func TestMakeCredentialCredPropsOutputDependsOnCredPropsInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := resp.ExtensionOutputs.CreateCredentialPropertiesOutputs; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
-	if got := resp.ExtensionOutputs.CreateCredentialPropertiesOutputs.CredentialProperties.ResidentKey; got == nil {
+
+	if got := resp.ExtensionOutputs.CredentialProperties.ResidentKey; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
-	if got := *resp.ExtensionOutputs.CreateCredentialPropertiesOutputs.CredentialProperties.ResidentKey; !got {
+
+	if got := *resp.ExtensionOutputs.CredentialProperties.ResidentKey; !got {
 		t.Errorf("got false, want true")
 	}
 }
@@ -745,9 +789,11 @@ func TestMakeCredentialRequiresMaxCredBlobLengthWhenCredBlobExtensionReported(t 
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "maxCredBlobLength"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	assertNoAuthenticatorIO(t, fake)
 }
 
@@ -764,6 +810,7 @@ func TestHMACSecretPinUvAuthProtocolWirePresence(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			input := newHMACSecretInput(cose.Key{1: 2}, []byte{3}, []byte{4}, tt.protocol)
+
 			raw, err := cbor.Marshal(input)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -773,6 +820,7 @@ func TestHMACSecretPinUvAuthProtocolWirePresence(t *testing.T) {
 			if err := cbor.Unmarshal(raw, &fields); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if tt.wantMember {
 				if _, ok := fields[uint64(4)]; !ok {
 					t.Fatalf("value does not contain %#v", uint64(4))

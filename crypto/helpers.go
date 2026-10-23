@@ -11,10 +11,12 @@ const MaxLargeBlobDataSize uint = 1 << 20
 
 func compress(uncompressed []byte) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
+
 	w, err := flate.NewWriter(buf, flate.BestCompression)
 	if err != nil {
 		return nil, err
 	}
+
 	defer func() {
 		// to be sure we close it
 		_ = w.Close()
@@ -23,6 +25,7 @@ func compress(uncompressed []byte) ([]byte, error) {
 	if _, err := w.Write(uncompressed); err != nil {
 		return nil, err
 	}
+
 	if err := w.Close(); err != nil {
 		return nil, err
 	}
@@ -60,6 +63,7 @@ func DecompressLargeBlobData(compressed []byte, originalSize uint) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
+
 	if uint(len(data)) != originalSize {
 		return nil, fmt.Errorf("large blob orig size mismatch: got %d, want %d", len(data), originalSize)
 	}

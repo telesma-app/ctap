@@ -44,6 +44,7 @@ func TestGetUVRetriesIncludesPinUvAuthProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := retries, uint(5); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -87,6 +88,7 @@ func TestClientUsesConfiguredTransport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	response, err := client.GetInfo(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -113,6 +115,7 @@ func TestClientGetInfoRemainsCompatibleWithFIDO20Response(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	response, err := client.GetInfo(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -123,9 +126,11 @@ func TestClientGetInfoRemainsCompatibleWithFIDO20Response(t *testing.T) {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
 	}
+
 	if got, want := response.EffectiveMaxPINLength(), protocol.DefaultMaxPINCodePoints; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got := response.AuthenticatorConfigCommands; got != nil {
 		t.Errorf("got %#v, want nil", got)
 	}
@@ -147,6 +152,7 @@ func TestClientUsesConfiguredDecMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	response, err := lenientClient.GetInfo(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -162,6 +168,7 @@ func TestClientUsesConfiguredDecMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	strictClient, err := NewClient(
 		options.WithDecMode(decMode),
 		options.WithTransport(&fakeCBORTransport{
@@ -173,10 +180,12 @@ func TestClientUsesConfiguredDecMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	_, err = strictClient.GetInfo(context.Background())
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "invalid UTF-8"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -200,14 +209,18 @@ func TestClientReturnsConfiguredTransportCTAPStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	_, err = client.GetInfo(context.Background())
+
 	var ctapErr *ctaptransport.CTAPError
 	if err := err; !errors.As(err, &ctapErr) {
 		t.Fatalf("error %v does not match requested type", err)
 	}
+
 	if got, want := ctapErr.Command, protocol.AuthenticatorGetInfo; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := ctapErr.StatusCode, ctaptransport.CTAP2_ERR_INVALID_CBOR; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -241,6 +254,7 @@ func TestMakeCredentialRequestShapeAndPINAuthParam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	request := assertCTAPRequest(t, fake, expectedCTAPRequest{
 		command: protocol.AuthenticatorMakeCredential,
 		keys:    []uint64{1, 2, 3, 4, 8, 9},
@@ -249,6 +263,7 @@ func TestMakeCredentialRequestShapeAndPINAuthParam(t *testing.T) {
 	if got, want := requestBytes(t, request, uint64(1)), clientDataHash; got == nil != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := requestBytes(t, request, uint64(8)), crypto.Authenticate(protocol.PinUvAuthProtocolTwo, token, clientDataHash); got == nil != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -281,6 +296,7 @@ func TestMakeCredentialMinimalRequestOmitsEmptyExcludeList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := resp.AuthData; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
@@ -331,6 +347,7 @@ func TestMakeCredentialFullRequestShape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := resp.AuthData; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
@@ -346,6 +363,7 @@ func TestMakeCredentialFullRequestShape(t *testing.T) {
 	if got, want := requestBytes(t, request, uint64(8)), crypto.Authenticate(protocol.PinUvAuthProtocolTwo, token, clientDataHash); got == nil != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	extensions, ok := request[uint64(6)].(map[any]any)
 	if got := ok; !got {
 		t.Fatalf("got false, want true")
@@ -383,6 +401,7 @@ func TestMakeCredentialRejectsInvalidClientDataHashBeforeCommand(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if got := fake.Writes(); len(got) != 0 {
 		t.Errorf("got non-empty value %#v", got)
 	}
@@ -452,6 +471,7 @@ func TestGetAssertionRequestShapeAndPINAuthParam(t *testing.T) {
 	}))
 
 	var assertions int
+
 	for assertion, err := range newTestClient(t, fake).GetAssertion(
 		context.Background(),
 		protocol.PinUvAuthProtocolTwo,
@@ -465,11 +485,14 @@ func TestGetAssertionRequestShapeAndPINAuthParam(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got := assertion.AuthData; got == nil {
 			t.Fatalf("got nil, want a non-nil value")
 		}
+
 		assertions++
 	}
+
 	if got, want := assertions, 1; got != want {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
@@ -482,9 +505,11 @@ func TestGetAssertionRequestShapeAndPINAuthParam(t *testing.T) {
 	if got, want := requestString(t, request, uint64(1)), "example.com"; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := requestBytes(t, request, uint64(2)), clientDataHash; got == nil != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := requestBytes(t, request, uint64(6)), crypto.Authenticate(protocol.PinUvAuthProtocolTwo, token, clientDataHash); got == nil != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -498,6 +523,7 @@ func TestGetAssertionMinimalRequestOmitsEmptyAllowList(t *testing.T) {
 	}))
 
 	var assertions int
+
 	for assertion, err := range newTestClient(t, fake).GetAssertion(
 		context.Background(),
 		0,
@@ -511,11 +537,14 @@ func TestGetAssertionMinimalRequestOmitsEmptyAllowList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got := assertion.AuthData; got == nil {
 			t.Fatalf("got nil, want a non-nil value")
 		}
+
 		assertions++
 	}
+
 	if got, want := assertions, 1; got != want {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
@@ -524,6 +553,7 @@ func TestGetAssertionMinimalRequestOmitsEmptyAllowList(t *testing.T) {
 	if got, want := command, protocol.AuthenticatorGetAssertion; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	assertRequestKeys(t, request, 1, 2)
 }
 
@@ -536,6 +566,7 @@ func TestGetAssertionFullRequestShape(t *testing.T) {
 	}))
 
 	var assertions int
+
 	for assertion, err := range newTestClient(t, fake).GetAssertion(
 		context.Background(),
 		protocol.PinUvAuthProtocolTwo,
@@ -558,11 +589,14 @@ func TestGetAssertionFullRequestShape(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got := assertion.AuthData; got == nil {
 			t.Fatalf("got nil, want a non-nil value")
 		}
+
 		assertions++
 	}
+
 	if got, want := assertions, 1; got != want {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
@@ -575,6 +609,7 @@ func TestGetAssertionFullRequestShape(t *testing.T) {
 	if got, want := requestBytes(t, request, uint64(6)), crypto.Authenticate(protocol.PinUvAuthProtocolTwo, token, clientDataHash); got == nil != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	extensions, ok := request[uint64(4)].(map[any]any)
 	if got := ok; !got {
 		t.Fatalf("got false, want true")
@@ -604,16 +639,20 @@ func TestGetAssertionRejectsInvalidClientDataHashBeforeCommand(t *testing.T) {
 		nil,
 	) {
 		yielded++
+
 		if !assertionResponseIsZero(assertion) {
 			t.Errorf("got %#v, want zero response", assertion)
 		}
+
 		if err == nil {
 			t.Fatalf("expected an error")
 		}
 	}
+
 	if got, want := yielded, 1; got != want {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
+
 	if got := fake.Writes(); len(got) != 0 {
 		t.Errorf("got non-empty value %#v", got)
 	}
@@ -636,6 +675,7 @@ func TestGetAssertionFetchesNextAssertions(t *testing.T) {
 	fake := testhid.NewCBORDevice(t, testCID, first, second, third)
 
 	var signatures [][]byte
+
 	for assertion, err := range newTestClient(t, fake).GetAssertion(
 		context.Background(),
 		0,
@@ -649,6 +689,7 @@ func TestGetAssertionFetchesNextAssertions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		signatures = append(signatures, assertion.Signature)
 	}
 
@@ -660,6 +701,7 @@ func TestGetAssertionFetchesNextAssertions(t *testing.T) {
 			t.Fatalf("got %#v, want %#v", got, want)
 		}
 	}
+
 	requests := fake.Requests(t)
 	if got, want := len(requests), 3; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
@@ -669,11 +711,13 @@ func TestGetAssertionFetchesNextAssertions(t *testing.T) {
 	if got, want := command, protocol.AuthenticatorGetAssertion; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	for _, request := range requests[1:] {
 		command, body := request.CTAPPayload(t)
 		if got, want := command, protocol.AuthenticatorGetNextAssertion; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
+
 		if got := body; len(got) != 0 {
 			t.Errorf("got non-empty value %#v", got)
 		}
@@ -689,6 +733,7 @@ func TestGetAssertionStopsBeforeGetNextAssertionWhenIteratorStops(t *testing.T) 
 	fake := testhid.NewCBORDevice(t, testCID, first)
 
 	var assertions int
+
 	for assertion, err := range newTestClient(t, fake).GetAssertion(
 		context.Background(),
 		0,
@@ -708,13 +753,16 @@ func TestGetAssertionStopsBeforeGetNextAssertionWhenIteratorStops(t *testing.T) 
 				t.Errorf("got %#v, want %#v", got, want)
 			}
 		}
+
 		assertions++
+
 		break
 	}
 
 	if got, want := assertions, 1; got != want {
 		t.Fatalf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := len(fake.Requests(t)), 1; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
 	}
@@ -736,13 +784,16 @@ func TestGetAssertionReturnsResponseDecodeErrors(t *testing.T) {
 			nil,
 		) {
 			yielded++
+
 			if !assertionResponseIsZero(assertion) {
 				t.Errorf("got %#v, want zero response", assertion)
 			}
+
 			if err == nil {
 				t.Fatalf("expected an error")
 			}
 		}
+
 		if got, want := yielded, 1; got != want {
 			t.Fatalf("got %#v, want %#v", got, want)
 		}
@@ -766,13 +817,16 @@ func TestGetAssertionReturnsResponseDecodeErrors(t *testing.T) {
 			nil,
 		) {
 			yielded++
+
 			if !assertionResponseIsZero(assertion) {
 				t.Errorf("got %#v, want zero response", assertion)
 			}
+
 			if err == nil {
 				t.Fatalf("expected an error")
 			}
 		}
+
 		if got, want := yielded, 1; got != want {
 			t.Fatalf("got %#v, want %#v", got, want)
 		}
@@ -782,6 +836,7 @@ func TestGetAssertionReturnsResponseDecodeErrors(t *testing.T) {
 func TestClientPINRequestShapes(t *testing.T) {
 	t.Run("set PIN", func(t *testing.T) {
 		fake := testhid.NewCBORDevice(t, testCID, nil)
+
 		err := newTestClient(t, fake).SetPIN(context.Background(), protocol.PinUvAuthProtocolTwo, testKeyAgreement(t), "1234")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -798,6 +853,7 @@ func TestClientPINRequestShapes(t *testing.T) {
 		if got, want := len(requestBytes(t, request, 4)), 32; got != want {
 			t.Errorf("got length %d, want %d", got, want)
 		}
+
 		if got, want := len(requestBytes(t, request, 5)), 80; got != want {
 			t.Errorf("got length %d, want %d", got, want)
 		}
@@ -805,6 +861,7 @@ func TestClientPINRequestShapes(t *testing.T) {
 
 	t.Run("change PIN", func(t *testing.T) {
 		fake := testhid.NewCBORDevice(t, testCID, nil)
+
 		err := newTestClient(t, fake).ChangePIN(context.Background(), protocol.PinUvAuthProtocolTwo, testKeyAgreement(t), "1234", "5678")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -821,9 +878,11 @@ func TestClientPINRequestShapes(t *testing.T) {
 		if got, want := len(requestBytes(t, request, 4)), 32; got != want {
 			t.Errorf("got length %d, want %d", got, want)
 		}
+
 		if got, want := len(requestBytes(t, request, 5)), 80; got != want {
 			t.Errorf("got length %d, want %d", got, want)
 		}
+
 		if got, want := len(requestBytes(t, request, 6)), 32; got != want {
 			t.Errorf("got length %d, want %d", got, want)
 		}
@@ -831,10 +890,12 @@ func TestClientPINRequestShapes(t *testing.T) {
 
 	t.Run("get PIN token validates PIN before command", func(t *testing.T) {
 		fake := testhid.NewCBORDevice(t, testCID)
+
 		_, err := newTestClient(t, fake).GetPinToken(context.Background(), protocol.PinUvAuthProtocolTwo, testKeyAgreement(t), "123\x00")
 		if err == nil {
 			t.Fatalf("expected an error")
 		}
+
 		if got := fake.Writes(); len(got) != 0 {
 			t.Errorf("got non-empty value %#v", got)
 		}
@@ -842,6 +903,7 @@ func TestClientPINRequestShapes(t *testing.T) {
 
 	t.Run("get PIN/UV auth token with permissions validates PIN before command", func(t *testing.T) {
 		fake := testhid.NewCBORDevice(t, testCID)
+
 		_, err := newTestClient(t, fake).GetPinUvAuthTokenUsingPinWithPermissions(
 			context.Background(),
 			protocol.PinUvAuthProtocolTwo,
@@ -853,6 +915,7 @@ func TestClientPINRequestShapes(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected an error")
 		}
+
 		if got := fake.Writes(); len(got) != 0 {
 			t.Errorf("got non-empty value %#v", got)
 		}
@@ -933,18 +996,24 @@ func TestClientPINRequestShapes(t *testing.T) {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
+
 				keyAgreement, err := cose.KeyFromP256PublicKey(authenticatorPrivateKey.PublicKey())
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
+
 				wantKeyAgreementX := slices.Clone(keyAgreement[cose.EC2KeyParameterX].([]byte))
 				wantKeyAgreementY := slices.Clone(keyAgreement[cose.EC2KeyParameterY].([]byte))
+
 				wantTokenLength := 32
 				if testCase.pinUvAuthProtocol == protocol.PinUvAuthProtocolOne {
 					wantTokenLength = 16
 				}
+
 				wantToken := bytes.Repeat([]byte{0x52}, wantTokenLength)
+
 				var sentRequest []byte
+
 				transport := clientPINTokenCBORFunc(func(
 					_ context.Context,
 					request []byte,
@@ -953,6 +1022,7 @@ func TestClientPINRequestShapes(t *testing.T) {
 					if got := request; len(got) == 0 {
 						t.Fatalf("got empty value %#v, want non-empty", got)
 					}
+
 					if got, want := protocol.Command(request[0]), protocol.AuthenticatorClientPIN; got != want {
 						t.Fatalf("got %#v, want %#v", got, want)
 					}
@@ -961,16 +1031,20 @@ func TestClientPINRequestShapes(t *testing.T) {
 					if err := cbor.Unmarshal(request[1:], &clientPIN); err != nil {
 						t.Fatalf("unexpected error: %v", err)
 					}
+
 					platformPublicKey, err := clientPIN.KeyAgreement.P256PublicKey()
 					if err != nil {
 						t.Fatalf("unexpected error: %v", err)
 					}
+
 					z, err := authenticatorPrivateKey.ECDH(platformPublicKey)
 					if err != nil {
 						t.Fatalf("unexpected error: %v", err)
 					}
 					defer clear(z)
+
 					var sharedSecret []byte
+
 					switch testCase.pinUvAuthProtocol {
 					case protocol.PinUvAuthProtocolOne:
 						sharedSecret = protocolone.KDF(z)
@@ -982,15 +1056,18 @@ func TestClientPINRequestShapes(t *testing.T) {
 					default:
 						t.Fatalf("unexpected PIN/UV auth protocol: %d", testCase.pinUvAuthProtocol)
 					}
+
 					defer clear(sharedSecret)
 
 					var encryptedToken []byte
+
 					switch testCase.pinUvAuthProtocol {
 					case protocol.PinUvAuthProtocolOne:
 						encryptedToken, err = protocolone.Encrypt(sharedSecret, wantToken)
 					case protocol.PinUvAuthProtocolTwo:
 						encryptedToken, err = protocoltwo.Encrypt(sharedSecret, wantToken)
 					}
+
 					if err != nil {
 						t.Fatalf("unexpected error: %v", err)
 					}
@@ -1002,6 +1079,7 @@ func TestClientPINRequestShapes(t *testing.T) {
 						}),
 					}, nil
 				})
+
 				client, err := NewClient(options.WithTransport(transport))
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
@@ -1011,6 +1089,7 @@ func TestClientPINRequestShapes(t *testing.T) {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
+
 				if got, want := token, wantToken; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 					t.Errorf("got %#v, want %#v", got, want)
 				}
@@ -1035,7 +1114,9 @@ func TestClientPINRequestShapes(t *testing.T) {
 				if err := cbor.Unmarshal(sentRequest[1:], &requestFields); err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
+
 				assertRequestKeys(t, requestFields, testCase.requestKeys...)
+
 				if got, want := requestFields[uint64(1)], uint64(testCase.pinUvAuthProtocol); got != want {
 					t.Errorf("got %#v, want %#v", got, want)
 				}
@@ -1067,6 +1148,7 @@ func TestClientPINRequestShapes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := len(token), 16; got != want {
 			t.Errorf("got length %d, want %d", got, want)
 		}
@@ -1096,6 +1178,7 @@ func TestClientPINRequestShapes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := len(token), 32; got != want {
 			t.Errorf("got length %d, want %d", got, want)
 		}
@@ -1120,6 +1203,7 @@ func TestBioEnrollmentRequestShapeAndPINAuthParam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	request := assertCTAPRequest(t, fake, expectedCTAPRequest{
 		command: protocol.AuthenticatorBioEnrollment,
 		keys:    []uint64{1, 2, 3, 4, 5},
@@ -1150,6 +1234,7 @@ func TestCredentialManagementRequestShapeAndPINAuthParam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	request := assertCTAPRequest(t, fake, expectedCTAPRequest{
 		command: protocol.AuthenticatorCredentialManagement,
 		keys:    []uint64{1, 3, 4},
@@ -1183,6 +1268,7 @@ func TestCredentialEnumerationRejectsMissingOrZeroTotals(t *testing.T) {
 				for _, err := range cl.EnumerateRPs(context.Background(), false, protocol.PinUvAuthProtocolTwo, token) {
 					return err
 				}
+
 				return nil
 			},
 		},
@@ -1194,6 +1280,7 @@ func TestCredentialEnumerationRejectsMissingOrZeroTotals(t *testing.T) {
 				for _, err := range cl.EnumerateRPs(context.Background(), false, protocol.PinUvAuthProtocolTwo, token) {
 					return err
 				}
+
 				return nil
 			},
 		},
@@ -1204,6 +1291,7 @@ func TestCredentialEnumerationRejectsMissingOrZeroTotals(t *testing.T) {
 				for _, err := range cl.EnumerateCredentials(context.Background(), false, protocol.PinUvAuthProtocolTwo, token, make([]byte, 32)) {
 					return err
 				}
+
 				return nil
 			},
 		},
@@ -1215,6 +1303,7 @@ func TestCredentialEnumerationRejectsMissingOrZeroTotals(t *testing.T) {
 				for _, err := range cl.EnumerateCredentials(context.Background(), false, protocol.PinUvAuthProtocolTwo, token, make([]byte, 32)) {
 					return err
 				}
+
 				return nil
 			},
 		},
@@ -1223,13 +1312,16 @@ func TestCredentialEnumerationRejectsMissingOrZeroTotals(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fake := testhid.NewCBORDevice(t, testCID, encodeCBOR(t, &tc.response))
+
 			err := tc.invoke(newTestClient(t, fake))
 			if err == nil {
 				t.Fatalf("expected an error")
 			}
+
 			if container, element := err.Error(), "spec violation"; !strings.Contains(container, element) {
 				t.Errorf("value does not contain %#v", element)
 			}
+
 			if container, element := err.Error(), tc.field; !strings.Contains(container, element) {
 				t.Errorf("value does not contain %#v", element)
 			}
@@ -1251,6 +1343,7 @@ func TestNormalizeSelectionError(t *testing.T) {
 
 	t.Run("cancel write error is preserved", func(t *testing.T) {
 		cancelWriteErr := errors.New("cancel write failed")
+
 		err := normalizeSelectionError(cancelWriteErr)
 		if err, target := err, cancelWriteErr; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
@@ -1262,6 +1355,7 @@ func TestNormalizeSelectionError(t *testing.T) {
 			Command:    protocol.AuthenticatorSelection,
 			StatusCode: ctaptransport.CTAP1_ERR_INVALID_COMMAND,
 		}
+
 		err := normalizeSelectionError(want)
 		if err, target := err, want; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
@@ -1280,6 +1374,7 @@ func TestLargeBlobsRequestShapeAndPINAuthParam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got := resp.Config; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
@@ -1300,6 +1395,7 @@ func TestLargeBlobsRequestShapeAndPINAuthParam(t *testing.T) {
 	padding := bytes.Repeat([]byte{0xff}, 32)
 	offsetBin := make([]byte, 4)
 	binary.LittleEndian.PutUint32(offsetBin, uint32(offset))
+
 	hash := sha256.Sum256(set)
 	expectedParam := crypto.Authenticate(
 		protocol.PinUvAuthProtocolTwo,
@@ -1320,9 +1416,11 @@ func TestLargeBlobsPreservesZeroLengthReadAndWritePresence(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got := resp.Config; got == nil {
 			t.Fatalf("got nil, want a non-nil value")
 		}
+
 		if got := resp.Config; len(got) != 0 {
 			t.Fatalf("got non-empty value %#v", got)
 		}
@@ -1346,7 +1444,9 @@ func TestLargeBlobsPreservesZeroLengthReadAndWritePresence(t *testing.T) {
 		if got, want := command, protocol.AuthenticatorLargeBlobs; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
+
 		assertRequestKeys(t, request, 2, 3, 4)
+
 		if got := requestBytes(t, request, 2); len(got) != 0 {
 			t.Errorf("got non-empty value %#v", got)
 		}
@@ -1391,6 +1491,7 @@ func TestConfigRequestShapeAndPINAuthParam(t *testing.T) {
 
 func TestConfigRequestWithoutTokenOmitsAuthorization(t *testing.T) {
 	fake := testhid.NewCBORDevice(t, testCID, nil)
+
 	err := newTestClient(t, fake).SetMinPINLength(context.Background(), 0, nil, protocol.SetMinPINLengthConfigSubCommandParams{
 		NewMinPINLength: new(uint(8)),
 	})
@@ -1402,7 +1503,9 @@ func TestConfigRequestWithoutTokenOmitsAuthorization(t *testing.T) {
 	if got, want := command, protocol.AuthenticatorConfig; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	assertRequestKeys(t, request, 1, 2)
+
 	params, ok := request[uint64(2)].(map[any]any)
 	if !ok || len(params) != 1 || params[uint64(1)] != uint64(8) {
 		t.Errorf("got %#v, want map[1:8]", request[uint64(2)])
@@ -1429,12 +1532,14 @@ func TestSetMinPINLengthPreservesZeroMinimumAndOmitsEquivalentZeroValues(t *test
 	if got, want := command, protocol.AuthenticatorConfig; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	assertRequestKeys(t, request, 1, 2)
 
 	params, ok := request[uint64(2)].(map[any]any)
 	if got := ok; !got {
 		t.Fatalf("got false, want true")
 	}
+
 	if len(params) != 1 || params[uint64(1)] != uint64(0) {
 		t.Errorf("got %#v, want map[1:0]", params)
 	}
@@ -1503,6 +1608,7 @@ func TestProtectedCommandsRejectInvalidTokenBeforeTransport(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected an error")
 		}
+
 		if got := fake.Writes(); len(got) != 0 {
 			t.Errorf("got non-empty value %#v", got)
 		}
@@ -1520,6 +1626,7 @@ func TestProtectedCommandsRejectInvalidTokenBeforeTransport(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected an error")
 		}
+
 		if got := fake.Writes(); len(got) != 0 {
 			t.Errorf("got non-empty value %#v", got)
 		}

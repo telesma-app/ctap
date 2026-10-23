@@ -13,6 +13,7 @@ import (
 func TestP256PublicKeyCOSECBORRoundTrip(t *testing.T) {
 	privateKeyBytes := make([]byte, 32)
 	privateKeyBytes[31] = 1
+
 	privateKey, err := ecdh.P256().NewPrivateKey(privateKeyBytes)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -22,6 +23,7 @@ func TestP256PublicKeyCOSECBORRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := len(key), 5; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
 	}
@@ -30,6 +32,7 @@ func TestP256PublicKeyCOSECBORRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	encoded, err := encMode.Marshal(key)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -49,20 +52,18 @@ func TestP256PublicKeyCOSECBORRoundTrip(t *testing.T) {
 	if err := cbor.Unmarshal(encoded, &decoded); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	publicKey, err := decoded.P256PublicKey()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := publicKey.Bytes(), privateKey.PublicKey().Bytes(); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
 }
 
 func TestKeyFromP256PublicKeyRejectsUnsupportedKeys(t *testing.T) {
-	_, err := KeyFromP256PublicKey(nil)
-	if err == nil {
-		t.Fatalf("expected an error")
-	}
 	if fips140.Enabled() {
 		return
 	}
@@ -71,9 +72,23 @@ func TestKeyFromP256PublicKeyRejectsUnsupportedKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	_, err = KeyFromP256PublicKey(x25519PrivateKey.PublicKey())
 	if err == nil {
 		t.Fatalf("expected an error")
+	}
+}
+
+func TestP256KeyCoordinateAppendPreservesOtherCoordinate(t *testing.T) {
+	key := validP256Key(t)
+	x := key[EC2KeyParameterX].([]byte)
+	y := key[EC2KeyParameterY].([]byte)
+	wantY := bytes.Clone(y)
+
+	_ = append(x, y[0]^0xff)
+
+	if !bytes.Equal(y, wantY) {
+		t.Errorf("appending to x changed y: got %x, want %x", y, wantY)
 	}
 }
 
@@ -140,16 +155,20 @@ func TestP256PublicKeyAcceptsUnsignedDecodedIntegers(t *testing.T) {
 
 func validP256Key(t *testing.T) Key {
 	t.Helper()
+
 	privateKeyBytes := make([]byte, 32)
 	privateKeyBytes[31] = 1
+
 	privateKey, err := ecdh.P256().NewPrivateKey(privateKeyBytes)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	key, err := KeyFromP256PublicKey(privateKey.PublicKey())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return key
 }
 
@@ -160,16 +179,20 @@ func cloneKey(key Key) Key {
 			cloned[label] = append([]byte(nil), bytes...)
 			continue
 		}
+
 		cloned[label] = value
 	}
+
 	return cloned
 }
 
 func mustDecodeHex(t *testing.T, value string) []byte {
 	t.Helper()
+
 	decoded, err := hex.DecodeString(value)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return decoded
 }

@@ -17,13 +17,14 @@ func validateUserVerificationRequest(
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorMakeCredential
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorGetAssertion
 	if pinUvAuthToken != nil && len(pinUvAuthToken) == 0 {
-		return newErrorMessage(SyntaxError, "pinUvAuthToken must not be empty")
+		return &ErrorWithMessage{Err: SyntaxError, Message: "pinUvAuthToken must not be empty"}
 	}
 
 	hasToken := pinUvAuthToken != nil
+
 	builtInUVRequested := options[protocol.OptionUserVerification]
 	if hasToken && builtInUVRequested {
-		return newErrorMessage(SyntaxError, "pinUvAuthToken and built-in user verification are mutually exclusive")
+		return &ErrorWithMessage{Err: SyntaxError, Message: "pinUvAuthToken and built-in user verification are mutually exclusive"}
 	}
 
 	// CTAP 2.1 PS § 6.4 (uv option ID states):
@@ -31,10 +32,11 @@ func validateUserVerificationRequest(
 	if builtInUVRequested {
 		builtInUVConfigured, ok := info.Options[protocol.OptionUserVerification]
 		if !ok {
-			return newErrorMessage(ErrNotSupported, "device doesn't support built-in user verification")
+			return &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support built-in user verification"}
 		}
+
 		if !builtInUVConfigured {
-			return newErrorMessage(ErrUvNotConfigured, "please configure UV first (e.g. enroll biometry)")
+			return &ErrorWithMessage{Err: ErrUvNotConfigured, Message: "please configure UV first (e.g. enroll biometry)"}
 		}
 	}
 
@@ -95,13 +97,11 @@ func (d *Device) pinUvAuthProtocolForRequest(
 	if !isFIDO20Only(d.info.Versions) && !d.info.Versions.IsPreviewOnly() &&
 		pinUvAuthProtocol == protocol.PinUvAuthProtocolOne &&
 		len(pinUvAuthToken) != 16 && len(pinUvAuthToken) != 32 {
-		return 0, newErrorMessage(
-			SyntaxError,
-			"pinUvAuthToken must be 16 or 32 bytes for PIN/UV auth protocol 1 on CTAP 2.1 or later",
-		)
+		return 0, &ErrorWithMessage{Err: SyntaxError, Message: "pinUvAuthToken must be 16 or 32 bytes for PIN/UV auth protocol 1 on CTAP 2.1 or later"}
 	}
+
 	if err := pin.ValidateUvAuthToken(pinUvAuthProtocol, pinUvAuthToken); err != nil {
-		return 0, newErrorMessage(SyntaxError, err.Error())
+		return 0, &ErrorWithMessage{Err: SyntaxError, Message: err.Error()}
 	}
 
 	return pinUvAuthProtocol, nil
@@ -131,6 +131,7 @@ func validateMakeCredentialAuthorization(
 		requiresUV = alwaysUVEnabled(info) || userVerificationConfigured && (!info.Options[protocol.OptionMakeCredentialUvNotRequired] ||
 			options[protocol.OptionResidentKeys])
 	}
+
 	if !requiresUV {
 		return nil
 	}
@@ -159,7 +160,7 @@ func validateGetAssertionAuthorization(
 	// CTAP 2.1 PS § 6.2 (GetAssertion options; rk is not defined):
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorGetAssertion
 	if _, ok := options[protocol.OptionResidentKeys]; ok {
-		return newErrorMessage(ErrNotSupported, "rk option is not supported by GetAssertion")
+		return &ErrorWithMessage{Err: ErrNotSupported, Message: "rk option is not supported by GetAssertion"}
 	}
 
 	userPresence, ok := options[protocol.OptionUserPresence]
@@ -182,24 +183,24 @@ func validateGetAssertionAuthorization(
 	}
 
 	if builtInUVConfigured, ok := info.Options[protocol.OptionUserVerification]; ok && !builtInUVConfigured {
-		return newErrorMessage(ErrUvNotConfigured, "please configure UV first (e.g. enroll biometry)")
+		return &ErrorWithMessage{Err: ErrUvNotConfigured, Message: "please configure UV first (e.g. enroll biometry)"}
 	}
 
-	return newErrorMessage(ErrBuiltInUVRequired, "alwaysUv requires user verification for GetAssertion")
+	return &ErrorWithMessage{Err: ErrBuiltInUVRequired, Message: "alwaysUv requires user verification for GetAssertion"}
 }
 
 func validatePinUvAuthTokenPermissionSet(permission protocol.Permission) error {
 	// CTAP 2.3 PS § 6.5.5 (permissions request member):
 	// https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#authnrClientPin-cmd-dfn
 	if permission == protocol.PermissionNone {
-		return newErrorMessage(SyntaxError, "pinUvAuthToken permission must not be zero")
+		return &ErrorWithMessage{Err: SyntaxError, Message: "pinUvAuthToken permission must not be zero"}
 	}
 
 	// CTAP 2.3 PS § 6.5.5.7 (pcmr is assigned as a standalone persistent-token permission):
 	// https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#gettingPinUvAuthToken
 	if permission&protocol.PermissionPersistentCredentialManagementReadOnly != 0 &&
 		permission != protocol.PermissionPersistentCredentialManagementReadOnly {
-		return newErrorMessage(SyntaxError, "pcmr permission cannot be combined with other permissions")
+		return &ErrorWithMessage{Err: SyntaxError, Message: "pcmr permission cannot be combined with other permissions"}
 	}
 
 	return nil
@@ -209,7 +210,7 @@ func validatePinUvAuthTokenPermissionRPID(permission protocol.Permission, rpID s
 	// CTAP 2.1 PS § 6.5.5.7 (permissions RP ID requirements):
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#gettingPinUvAuthToken
 	if permission&(protocol.PermissionMakeCredential|protocol.PermissionGetAssertion) != 0 && rpID == "" {
-		return newErrorMessage(SyntaxError, "rpID is required for MakeCredential and GetAssertion permissions")
+		return &ErrorWithMessage{Err: SyntaxError, Message: "rpID is required for MakeCredential and GetAssertion permissions"}
 	}
 
 	return nil
@@ -249,20 +250,18 @@ func selectPinTokenFlowUsingPIN(
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#getPinUvAuthTokenUsingPinWithPermissions
 	clientPIN, ok := info.Options[protocol.OptionClientPIN]
 	if !ok {
-		return 0, newErrorMessage(ErrNotSupported, "device doesn't support clientPin")
+		return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support clientPin"}
 	}
+
 	if !clientPIN {
-		return 0, newErrorMessage(ErrPinNotSet, "please set PIN first")
+		return 0, &ErrorWithMessage{Err: ErrPinNotSet, Message: "please set PIN first"}
 	}
 
 	// CTAP 2.1 PS § 6.4 (noMcGaPermissionsWithClientPin):
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#getinfo-nomcgapermissionswithclientpin
 	if info.Options[protocol.OptionNoMcGaPermissionsWithClientPin] &&
 		permission&(protocol.PermissionMakeCredential|protocol.PermissionGetAssertion) != 0 {
-		return 0, newErrorMessage(
-			ErrNotSupported,
-			"device doesn't allow PIN-obtained tokens with MakeCredential or GetAssertion permissions",
-		)
+		return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't allow PIN-obtained tokens with MakeCredential or GetAssertion permissions"}
 	}
 
 	// CTAP 2.1 PS §§ 6.5.5.7.2, 6.12, 6.13 (permission feature detection and preview compatibility):
@@ -270,14 +269,16 @@ func selectPinTokenFlowUsingPIN(
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#prototypeAuthenticatorBioEnrollment
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#prototypeAuthenticatorCredentialManagement
 	previewPermissions := protocol.PermissionNone
+
 	if permission&protocol.PermissionCredentialManagement != 0 {
 		if info.Versions.IsPreviewOnly() {
 			if _, err := credentialManagementMode(info); err != nil {
 				return 0, err
 			}
+
 			previewPermissions |= protocol.PermissionCredentialManagement
 		} else if !info.Options[protocol.OptionCredentialManagement] {
-			return 0, newErrorMessage(ErrNotSupported, "device doesn't support CredentialManagement permission")
+			return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support CredentialManagement permission"}
 		}
 	}
 
@@ -286,24 +287,27 @@ func selectPinTokenFlowUsingPIN(
 			if _, err := bioEnrollmentMode(info); err != nil {
 				return 0, err
 			}
+
 			previewPermissions |= protocol.PermissionBioEnrollment
 		} else if _, ok := info.Options[protocol.OptionBioEnroll]; !ok {
-			return 0, newErrorMessage(ErrNotSupported, "device doesn't support BioEnrollment permission")
+			return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support BioEnrollment permission"}
 		}
 	}
 
 	// CTAP 2.3 PS § 6.5.5.7.2 (lbw, acfg, and pcmr permission prerequisites):
 	// https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#getPinUvAuthTokenUsingPinWithPermissions
 	if permission&protocol.PermissionLargeBlobWrite != 0 && !info.Options[protocol.OptionLargeBlobs] {
-		return 0, newErrorMessage(ErrNotSupported, "device doesn't support LargeBlobWrite permission")
+		return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support LargeBlobWrite permission"}
 	}
+
 	if permission&protocol.PermissionAuthenticatorConfiguration != 0 &&
 		!info.Options[protocol.OptionAuthenticatorConfig] {
-		return 0, newErrorMessage(ErrNotSupported, "device doesn't support AuthenticatorConfiguration permission")
+		return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support AuthenticatorConfiguration permission"}
 	}
+
 	if permission&protocol.PermissionPersistentCredentialManagementReadOnly != 0 &&
 		!info.Options[protocol.OptionPersistentCredentialManagementReadOnly] {
-		return 0, newErrorMessage(ErrNotSupported, "device doesn't support PersistentCredentialManagementReadOnly permission")
+		return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support PersistentCredentialManagementReadOnly permission"}
 	}
 
 	permissionedTokens := permissionedPinUvAuthTokensSupported(info)
@@ -315,7 +319,7 @@ func selectPinTokenFlowUsingPIN(
 			protocol.PermissionGetAssertion |
 			previewPermissions
 		if permission&^legacyPermissions != 0 {
-			return 0, newErrorMessage(ErrNotSupported, "legacy getPinToken cannot grant the requested permissions")
+			return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "legacy getPinToken cannot grant the requested permissions"}
 		}
 
 		// Legacy getPinToken grants mc|ga without binding the token to an RP ID.
@@ -350,10 +354,11 @@ func selectPinUvAuthTokenFlowUsingUV(
 
 	uv, ok := info.Options[protocol.OptionUserVerification]
 	if !ok {
-		return 0, newErrorMessage(ErrNotSupported, "device doesn't support user verification")
+		return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support user verification"}
 	}
+
 	if !uv {
-		return 0, newErrorMessage(ErrUvNotConfigured, "please configure UV first (e.g. enroll biometry)")
+		return 0, &ErrorWithMessage{Err: ErrUvNotConfigured, Message: "please configure UV first (e.g. enroll biometry)"}
 	}
 
 	// FIDO_2_1_PRE RD 2019 § 5.5.8 (getUvToken) defines a legacy UV-token
@@ -364,30 +369,29 @@ func selectPinUvAuthTokenFlowUsingUV(
 	if info.Versions.IsPreviewOnly() && info.Options[protocol.OptionUvToken] {
 		if len(info.PinUvAuthProtocols) != 0 &&
 			!slices.Contains(info.PinUvAuthProtocols, protocol.PinUvAuthProtocolOne) {
-			return 0, newErrorMessage(
-				ErrNotSupported,
-				"device advertises uvToken without pinUvAuthProtocol 1",
-			)
+			return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device advertises uvToken without pinUvAuthProtocol 1"}
 		}
 
 		legacyPermissions := protocol.PermissionMakeCredential | protocol.PermissionGetAssertion
+
 		if permission&protocol.PermissionCredentialManagement != 0 {
 			if _, err := credentialManagementMode(info); err != nil {
 				return 0, err
 			}
+
 			legacyPermissions |= protocol.PermissionCredentialManagement
 		}
+
 		if permission&protocol.PermissionBioEnrollment != 0 {
 			if _, err := bioEnrollmentMode(info); err != nil {
 				return 0, err
 			}
+
 			legacyPermissions |= protocol.PermissionBioEnrollment
 		}
+
 		if permission&^legacyPermissions != 0 {
-			return 0, newErrorMessage(
-				ErrNotSupported,
-				"preview getUvToken cannot grant the requested permissions",
-			)
+			return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "preview getUvToken cannot grant the requested permissions"}
 		}
 
 		return uvTokenFlowPreview, nil
@@ -396,31 +400,35 @@ func selectPinUvAuthTokenFlowUsingUV(
 	// CTAP 2.1 PS § 6.5.5.7.3 (getPinUvAuthTokenUsingUvWithPermissions):
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#getPinUvAuthTokenUsingUvWithPermissions
 	if !permissionedPinUvAuthTokensSupported(info) {
-		return 0, newErrorMessage(ErrNotSupported, "device doesn't support pinUvAuthToken")
+		return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support pinUvAuthToken"}
 	}
 
 	// CTAP 2.3 PS § 6.5.5.7.3 (cm, be, lbw, acfg, and pcmr permission prerequisites):
 	// https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#getPinUvAuthTokenUsingUvWithPermissions
 	if permission&protocol.PermissionCredentialManagement != 0 &&
 		!info.Options[protocol.OptionCredentialManagement] {
-		return 0, newErrorMessage(ErrNotSupported, "device doesn't support CredentialManagement permission")
+		return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support CredentialManagement permission"}
 	}
+
 	if permission&protocol.PermissionBioEnrollment != 0 {
 		if _, ok := info.Options[protocol.OptionBioEnroll]; !ok || !info.Options[protocol.OptionUvBioEnroll] {
-			return 0, newErrorMessage(ErrNotSupported, "device doesn't support obtaining BioEnrollment permission using built-in UV")
+			return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support obtaining BioEnrollment permission using built-in UV"}
 		}
 	}
+
 	if permission&protocol.PermissionLargeBlobWrite != 0 && !info.Options[protocol.OptionLargeBlobs] {
-		return 0, newErrorMessage(ErrNotSupported, "device doesn't support LargeBlobWrite permission")
+		return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support LargeBlobWrite permission"}
 	}
+
 	if permission&protocol.PermissionAuthenticatorConfiguration != 0 {
 		if !info.Options[protocol.OptionAuthenticatorConfig] || !info.Options[protocol.OptionUvAcfg] {
-			return 0, newErrorMessage(ErrNotSupported, "device doesn't support obtaining AuthenticatorConfiguration permission using built-in UV")
+			return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support obtaining AuthenticatorConfiguration permission using built-in UV"}
 		}
 	}
+
 	if permission&protocol.PermissionPersistentCredentialManagementReadOnly != 0 &&
 		!info.Options[protocol.OptionPersistentCredentialManagementReadOnly] {
-		return 0, newErrorMessage(ErrNotSupported, "device doesn't support PersistentCredentialManagementReadOnly permission")
+		return 0, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support PersistentCredentialManagementReadOnly permission"}
 	}
 
 	if err := validatePinUvAuthTokenPermissionRPID(permission, rpID); err != nil {
@@ -440,7 +448,7 @@ func bioEnrollmentMode(info protocol.AuthenticatorGetInfoResponse) (preview bool
 		// exists. Presence of the option reports support, so false still permits
 		// preview enrollment commands.
 		if _, ok := info.Options[protocol.OptionUserVerificationMgmtPreview]; !ok {
-			return false, newErrorMessage(ErrNotSupported, "device doesn't support preview biometric enrollment")
+			return false, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support preview biometric enrollment"}
 		}
 
 		return true, nil
@@ -451,7 +459,7 @@ func bioEnrollmentMode(info protocol.AuthenticatorGetInfoResponse) (preview bool
 	// bioEnroll's value reports whether an enrollment exists. Presence of the
 	// option reports support, so false still permits enrollment commands.
 	if _, ok := info.Options[protocol.OptionBioEnroll]; !ok {
-		return false, newErrorMessage(ErrNotSupported, "device doesn't support biometric enrollment")
+		return false, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support biometric enrollment"}
 	}
 
 	return preview, nil
@@ -462,13 +470,14 @@ func credentialManagementMode(info protocol.AuthenticatorGetInfoResponse) (previ
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#authenticatorCredMgmtFeatureDetection
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#prototypeAuthenticatorCredentialManagement
 	preview = info.Versions.IsPreviewOnly()
+
 	option := protocol.OptionCredentialManagement
 	if preview {
 		option = protocol.OptionCredentialManagementPreview
 	}
 
 	if supported, ok := info.Options[option]; !ok || !supported {
-		return false, newErrorMessage(ErrNotSupported, "device doesn't support credential management")
+		return false, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support credential management"}
 	}
 
 	return preview, nil
@@ -507,7 +516,7 @@ func validateAuthenticatorConfigCommand(
 	// CTAP 2.1 PS § 6.4 (authnrCfg option ID):
 	// https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#getinfo-authnrcfg
 	if !info.Options[protocol.OptionAuthenticatorConfig] {
-		return newErrorMessage(ErrNotSupported, "device doesn't support authnrCfg")
+		return &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support authnrCfg"}
 	}
 
 	// CTAP 2.3 PS §§ 6.4, 6.11 (authenticatorConfigCommands):
@@ -517,10 +526,7 @@ func validateAuthenticatorConfigCommand(
 	// not advertise support for any standard authenticatorConfig subcommand.
 	if info.Versions.Supports(protocol.FIDO_2_3) &&
 		!slices.Contains(info.AuthenticatorConfigCommands, subCommand) {
-		return newErrorMessage(
-			ErrNotSupported,
-			fmt.Sprintf("device doesn't support authenticatorConfig subcommand %s", subCommand),
-		)
+		return &ErrorWithMessage{Err: ErrNotSupported, Message: fmt.Sprintf("device doesn't support authenticatorConfig subcommand %s", subCommand)}
 	}
 
 	return nil

@@ -19,9 +19,11 @@ func TestFIPS140SignatureRejectionIsReportedAsUnsupported(t *testing.T) {
 	if valid != nil {
 		t.Fatalf("valid = %v, want nil", valid)
 	}
+
 	if !errors.Is(err, ErrAlgorithmUnsupported) {
 		t.Fatalf("error = %v, want errors.Is(error, %v)", err, ErrAlgorithmUnsupported)
 	}
+
 	if !errors.Is(err, ctapfips140.ErrNotAllowed) {
 		t.Fatalf("error = %v, want errors.Is(error, %v)", err, ctapfips140.ErrNotAllowed)
 	}

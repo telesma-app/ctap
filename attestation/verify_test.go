@@ -34,6 +34,7 @@ func TestVerifyPacked(t *testing.T) {
 		if err != nil {
 			t.Fatalf("VerifyPacked() error = %v", err)
 		}
+
 		if verification.Type != TypeSelf || verification.SignatureValid == nil || !*verification.SignatureValid {
 			t.Fatalf("VerifyPacked() = %#v, want valid self attestation", verification)
 		}
@@ -42,6 +43,7 @@ func TestVerifyPacked(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		attestationKey := generateP256Key(t)
 		certificate := certificateDER(t, attestationKey)
+
 		verification, err := VerifyPacked(
 			PackedAttestationStatementFormat{
 				Algorithm: cose.AlgorithmES256,
@@ -56,9 +58,11 @@ func TestVerifyPacked(t *testing.T) {
 		if err != nil {
 			t.Fatalf("VerifyPacked() error = %v", err)
 		}
+
 		if verification.Type != TypeBasic || verification.SignatureValid == nil || !*verification.SignatureValid {
 			t.Fatalf("VerifyPacked() = %#v, want valid basic attestation", verification)
 		}
+
 		if len(verification.CertificateChain) != 1 {
 			t.Fatalf("certificate chain length = %d, want 1", len(verification.CertificateChain))
 		}
@@ -67,6 +71,7 @@ func TestVerifyPacked(t *testing.T) {
 	t.Run("invalid signature", func(t *testing.T) {
 		corrupt := append([]byte(nil), signature...)
 		corrupt[len(corrupt)-1] ^= 0xff
+
 		verification, err := VerifyPacked(
 			PackedAttestationStatementFormat{
 				Algorithm: cose.AlgorithmES256,
@@ -80,6 +85,7 @@ func TestVerifyPacked(t *testing.T) {
 		if !errors.Is(err, ErrSignatureInvalid) {
 			t.Fatalf("VerifyPacked() error = %v, want %v", err, ErrSignatureInvalid)
 		}
+
 		if verification.SignatureValid == nil || *verification.SignatureValid {
 			t.Fatalf("signature valid = %v, want false", verification.SignatureValid)
 		}
@@ -96,6 +102,7 @@ func TestVerifyPacked(t *testing.T) {
 		if !errors.Is(err, ErrFormatUnsupported) {
 			t.Fatalf("VerifyPacked() error = %v, want %v", err, ErrFormatUnsupported)
 		}
+
 		if verification.Type != TypeUnsupported {
 			t.Fatalf("attestation type = %q, want %q", verification.Type, TypeUnsupported)
 		}
@@ -108,10 +115,12 @@ func TestVerifyFIDOU2F(t *testing.T) {
 	rpIDHash := sha256.Sum256([]byte("example.test"))
 	clientDataHash := sha256.Sum256([]byte("client data"))
 	credentialID := []byte("credential")
+
 	publicKey, err := credentialKey.PublicKey.Bytes()
 	if err != nil {
 		t.Fatalf("credential public key bytes: %v", err)
 	}
+
 	signedData := make([]byte, 0, 1+len(rpIDHash)+len(clientDataHash)+len(credentialID)+len(publicKey))
 	signedData = append(signedData, 0)
 	signedData = append(signedData, rpIDHash[:]...)
@@ -133,6 +142,7 @@ func TestVerifyFIDOU2F(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VerifyFIDOU2F() error = %v", err)
 	}
+
 	if verification.Type != TypeBasic || verification.SignatureValid == nil || !*verification.SignatureValid {
 		t.Fatalf("VerifyFIDOU2F() = %#v, want valid basic attestation", verification)
 	}
@@ -153,6 +163,7 @@ func signES256(t *testing.T, key *ecdsa.PrivateKey, message []byte) []byte {
 	t.Helper()
 
 	digest := sha256.Sum256(message)
+
 	signature, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
 	if err != nil {
 		t.Fatalf("sign message: %v", err)
@@ -172,6 +183,7 @@ func certificateDER(t *testing.T, key *ecdsa.PrivateKey) []byte {
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		BasicConstraintsValid: true,
 	}
+
 	certificate, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	if err != nil {
 		t.Fatalf("create certificate: %v", err)

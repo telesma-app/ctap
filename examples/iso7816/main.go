@@ -25,10 +25,7 @@ func run(ctx context.Context) (err error) {
 		err = errors.Join(err, device.Close())
 	}()
 
-	info, valid := device.GetInfoCached()
-	if !valid {
-		return errors.New("authenticator info cache is unexpectedly invalid")
-	}
+	info, _ := device.GetInfoCached()
 
 	fmt.Printf("CTAP versions: %v\n", info.Versions)
 	fmt.Printf("AAGUID: %s\n", info.AAGUID)

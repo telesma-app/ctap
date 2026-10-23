@@ -53,16 +53,18 @@ var _ ctaptransport.Device = (*Transport)(nil)
 func Open(ctx context.Context, peripheral ble.Peripheral) (*Transport, error) {
 	services, err := peripheral.DiscoverServices(ctx)
 	if err != nil {
-		return nil, ioError(ctaptransport.IORead, err)
+		return nil, &ctaptransport.IOError{Operation: ctaptransport.IORead, Err: err}
 	}
 
 	var fidoService ble.Service
+
 	for _, service := range services {
 		if service.Primary() && service.UUID() == fidoServiceUUID {
 			fidoService = service
 			break
 		}
 	}
+
 	if fidoService == nil {
 		return nil, ErrFIDOServiceNotFound
 	}
@@ -75,13 +77,14 @@ func Open(ctx context.Context, peripheral ble.Peripheral) (*Transport, error) {
 		fidoServiceRevisionBitfieldUUID,
 	)
 	if err != nil {
-		return nil, ioError(ctaptransport.IORead, err)
+		return nil, &ctaptransport.IOError{Operation: ctaptransport.IORead, Err: err}
 	}
 
 	characteristicsByUUID := make(map[ble.UUID]ble.Characteristic, len(characteristics))
 	for _, characteristic := range characteristics {
 		characteristicsByUUID[characteristic.UUID()] = characteristic
 	}
+
 	fidoControlPoint, err := requireCharacteristic(
 		characteristicsByUUID,
 		fidoControlPointUUID,
@@ -90,6 +93,7 @@ func Open(ctx context.Context, peripheral ble.Peripheral) (*Transport, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	fidoStatus, err := requireCharacteristic(
 		characteristicsByUUID,
 		fidoStatusUUID,
@@ -98,6 +102,7 @@ func Open(ctx context.Context, peripheral ble.Peripheral) (*Transport, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	fidoControlPointLength, err := requireCharacteristic(
 		characteristicsByUUID,
 		fidoControlPointLengthUUID,
@@ -106,6 +111,7 @@ func Open(ctx context.Context, peripheral ble.Peripheral) (*Transport, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	fidoServiceRevisionBitfield, err := requireCharacteristic(
 		characteristicsByUUID,
 		fidoServiceRevisionBitfieldUUID,
@@ -117,22 +123,26 @@ func Open(ctx context.Context, peripheral ble.Peripheral) (*Transport, error) {
 
 	revisionBitfield, err := fidoServiceRevisionBitfield.Read(ctx)
 	if err != nil {
-		return nil, ioError(ctaptransport.IORead, err)
+		return nil, &ctaptransport.IOError{Operation: ctaptransport.IORead, Err: err}
 	}
+
 	if len(revisionBitfield) == 0 || revisionBitfield[0]&fido2RevisionBit == 0 {
 		return nil, ErrFIDO2Unsupported
 	}
+
 	if err := fidoServiceRevisionBitfield.Write(ctx, []byte{fido2RevisionBit}); err != nil {
-		return nil, ioError(ctaptransport.IOWrite, err)
+		return nil, &ctaptransport.IOError{Operation: ctaptransport.IOWrite, Err: err}
 	}
 
 	fidoControlPointLengthValue, err := fidoControlPointLength.Read(ctx)
 	if err != nil {
-		return nil, ioError(ctaptransport.IORead, err)
+		return nil, &ctaptransport.IOError{Operation: ctaptransport.IORead, Err: err}
 	}
+
 	if len(fidoControlPointLengthValue) != fidoControlPointLengthSize {
 		return nil, ErrInvalidFIDOControlPointLength
 	}
+
 	controlPointLength := int(binary.BigEndian.Uint16(fidoControlPointLengthValue))
 	if controlPointLength < minFIDOControlPointLength || controlPointLength > maxFIDOControlPointLength {
 		return nil, ErrInvalidFIDOControlPointLength
@@ -140,7 +150,7 @@ func Open(ctx context.Context, peripheral ble.Peripheral) (*Transport, error) {
 
 	fidoStatusNotifications, err := fidoStatus.Subscribe(ctx)
 	if err != nil {
-		return nil, ioError(ctaptransport.IORead, err)
+		return nil, &ctaptransport.IOError{Operation: ctaptransport.IORead, Err: err}
 	}
 
 	return &Transport{
@@ -162,9 +172,11 @@ func requireCharacteristic(
 	if characteristic == nil {
 		return nil, fmt.Errorf("%w: %s", ErrFIDOCharacteristicNotFound, uuid)
 	}
+
 	if characteristic.Properties()&properties != properties {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidCharacteristicProperties, uuid)
 	}
+
 	return characteristic, nil
 }
 
@@ -177,6 +189,7 @@ func (t *Transport) CBOR(ctx context.Context, data []byte) (ctaptransport.CBORRe
 	if err := ctx.Err(); err != nil {
 		return ctaptransport.CBORResponse{}, err
 	}
+
 	if len(data) == 0 {
 		return ctaptransport.CBORResponse{}, errors.New("ctapble: empty CBOR request")
 	}
@@ -190,11 +203,13 @@ func (t *Transport) CBOR(ctx context.Context, data []byte) (ctaptransport.CBORRe
 	if err != nil {
 		return ctaptransport.CBORResponse{}, t.closeOnIOError(err)
 	}
+
 	if len(response.data) == 0 {
 		return ctaptransport.CBORResponse{}, ErrInvalidFrame
 	}
 
 	command := protocol.Command(data[0])
+
 	return ctaptransport.ValidateCBORResponse(command, ctaptransport.CBORResponse{
 		StatusCode: ctaptransport.StatusCode(response.data[0]),
 		Data:       response.data[1:],
@@ -216,12 +231,14 @@ func (t *Transport) Ping(ctx context.Context, data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, t.closeOnIOError(err)
 	}
+
 	return response.data, nil
 }
 
 func retryBusy[T any](ctx context.Context, operation func() (T, error)) (T, error) {
 	for {
 		result, err := operation()
+
 		response, busy := errors.AsType[*ErrorResponse](err)
 		if !busy || response.ErrorCode != ERR_BUSY {
 			return result, err
@@ -233,7 +250,9 @@ func retryBusy[T any](ctx context.Context, operation func() (T, error)) (T, erro
 			if !timer.Stop() {
 				<-timer.C
 			}
+
 			var zero T
+
 			return zero, ctx.Err()
 		case <-timer.C:
 		}
@@ -251,6 +270,7 @@ func (t *Transport) exchange(ctx context.Context, command Command, data []byte) 
 	}
 
 	result := make(chan exchangeResult, 1)
+
 	go func() {
 		response, err := t.readResponse(command)
 		result <- exchangeResult{frame: response, err: err}
@@ -266,8 +286,10 @@ func (t *Transport) exchange(ctx context.Context, command Command, data []byte) 
 		}
 
 		originalErr := ctx.Err()
+
 		cancelCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cancelDrainTimeout)
 		defer cancel()
+
 		return t.cancelAndDrain(cancelCtx, originalErr, result)
 	}
 }
@@ -288,6 +310,7 @@ func (t *Transport) cancelAndDrain(
 			_ = t.Close()
 			return responseFrame{}, &ctaptransport.DeviceInvalidatedError{Err: originalErr}
 		}
+
 		return response.frame, originalErr
 	case <-ctx.Done():
 		_ = t.Close()
@@ -297,15 +320,18 @@ func (t *Transport) cancelAndDrain(
 
 func (t *Transport) readResponse(command Command) (responseFrame, error) {
 	var assembler responseFrameAssembler
+
 	for {
 		fragment, err := t.fidoStatusNotification()
 		if err != nil {
 			return responseFrame{}, err
 		}
+
 		response, err := assembler.addFragment(fragment)
 		if err != nil {
 			return responseFrame{}, err
 		}
+
 		if response == nil {
 			continue
 		}
@@ -315,12 +341,14 @@ func (t *Transport) readResponse(command Command) (responseFrame, error) {
 			if len(response.data) != keepaliveDataLength {
 				return responseFrame{}, ErrInvalidFrame
 			}
+
 			continue
 		case ERROR:
 			code, err := decodeErrorCode(response.data)
 			if err != nil {
 				return responseFrame{}, err
 			}
+
 			return responseFrame{}, &ErrorResponse{ErrorCode: code}
 		case command:
 			return *response, nil
@@ -333,15 +361,17 @@ func (t *Transport) readResponse(command Command) (responseFrame, error) {
 func (t *Transport) fidoStatusNotification() ([]byte, error) {
 	select {
 	case <-t.closed:
-		return nil, ioError(ctaptransport.IORead, ble.ErrClosed)
+		return nil, &ctaptransport.IOError{Operation: ctaptransport.IORead, Err: ble.ErrClosed}
 	case value, ok := <-t.fidoStatusNotifications.Listen():
 		if !ok {
 			err := t.fidoStatusNotifications.Close()
 			if err == nil {
 				err = io.EOF
 			}
-			return nil, ioError(ctaptransport.IORead, err)
+
+			return nil, &ctaptransport.IOError{Operation: ctaptransport.IORead, Err: err}
 		}
+
 		return value, nil
 	}
 }
@@ -356,22 +386,20 @@ func (t *Transport) writeRequest(ctx context.Context, command Command, data []by
 	case t.fidoControlPointWriteGate <- struct{}{}:
 		defer func() { <-t.fidoControlPointWriteGate }()
 	case <-ctx.Done():
-		return ioError(ctaptransport.IOWrite, ctx.Err())
+		return &ctaptransport.IOError{Operation: ctaptransport.IOWrite, Err: ctx.Err()}
 	}
+
 	for _, fragment := range fragments {
 		if err := t.fidoControlPoint.Write(ctx, fragment); err != nil {
-			return ioError(ctaptransport.IOWrite, err)
+			return &ctaptransport.IOError{Operation: ctaptransport.IOWrite, Err: err}
 		}
 	}
+
 	return nil
 }
 
 func (t *Transport) cancel(ctx context.Context) error {
 	return t.writeRequest(ctx, CANCEL, nil)
-}
-
-func ioError(operation ctaptransport.IOOperation, err error) error {
-	return &ctaptransport.IOError{Operation: operation, Err: err}
 }
 
 func isDeviceIOError(err error) bool {
@@ -383,7 +411,9 @@ func (t *Transport) closeOnIOError(err error) error {
 	if !isDeviceIOError(err) {
 		return err
 	}
+
 	_ = t.Close()
+
 	return &ctaptransport.DeviceInvalidatedError{Err: err}
 }
 
@@ -392,6 +422,7 @@ func (t *Transport) closeOnIOError(err error) error {
 func (t *Transport) Close() error {
 	t.closeOnce.Do(func() {
 		var cancelErr error
+
 		if t.activeMSG.Load() {
 			ctx, cancel := context.WithTimeout(context.Background(), closeCancelTimeout)
 			cancelErr = t.cancel(ctx)
@@ -399,18 +430,22 @@ func (t *Transport) Close() error {
 		}
 
 		close(t.closed)
+
 		if cancelErr != nil {
 			t.closeErr = errors.Join(
 				wrapClose(t.peripheral.Close()),
 				wrapClose(t.fidoStatusNotifications.Close()),
 			)
+
 			return
 		}
+
 		t.closeErr = errors.Join(
 			wrapClose(t.fidoStatusNotifications.Close()),
 			wrapClose(t.peripheral.Close()),
 		)
 	})
+
 	return t.closeErr
 }
 
@@ -418,5 +453,6 @@ func wrapClose(err error) error {
 	if err == nil {
 		return nil
 	}
-	return ioError(ctaptransport.IOClose, err)
+
+	return &ctaptransport.IOError{Operation: ctaptransport.IOClose, Err: err}
 }

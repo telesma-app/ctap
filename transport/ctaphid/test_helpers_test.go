@@ -10,6 +10,7 @@ import (
 
 func requireCTAPHIDError(t testing.TB, err error, want Error) {
 	t.Helper()
+
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
@@ -18,9 +19,11 @@ func requireCTAPHIDError(t testing.TB, err error, want Error) {
 	if err := err; !errors.As(err, &response) {
 		t.Fatalf("error %v does not match requested type", err)
 	}
+
 	if got, want := response.ErrorCode, want; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := byte(response.ErrorCode), byte(want); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -47,6 +50,7 @@ func rawResponseMessage(t testing.TB, cid ChannelID, cmd Command, data []byte) [
 			t.Fatalf("unexpected error: %v", err)
 		}
 	}
+
 	return bytes.Clone(buf.Bytes())
 }
 
@@ -56,6 +60,7 @@ func assertSingleReportRequest(t testing.TB, written []byte, cid ChannelID, cmd 
 	if got, want := len(written), hidReportPacketSize; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
 	}
+
 	if got, want := written[0], byte(0); got != want {
 		t.Errorf("got %#v, want %#v; context: %s", got, want, "report ID")
 	}
@@ -64,12 +69,15 @@ func assertSingleReportRequest(t testing.TB, written []byte, cid ChannelID, cmd 
 	if got, want := raw[:4], cid[:]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v; context: %s", got, want, "CID")
 	}
+
 	if got, want := raw[4], byte(cmd)|INIT_PACKET_BIT; got != want {
 		t.Errorf("got %#v, want %#v; context: %s", got, want, "command")
 	}
+
 	if got, want := binary.BigEndian.Uint16(raw[5:7]), uint16(len(data)); got != want {
 		t.Errorf("got %#v, want %#v; context: %s", got, want, "BCNT")
 	}
+
 	if len(data) == 0 {
 		if got := raw[initPacketHeaderSize : initPacketHeaderSize+len(data)]; len(got) != 0 {
 			t.Errorf("got non-empty value %#v", got)
@@ -79,6 +87,7 @@ func assertSingleReportRequest(t testing.TB, written []byte, cid ChannelID, cmd 
 			t.Errorf("got %#v, want %#v", got, want)
 		}
 	}
+
 	if got, want := raw[initPacketHeaderSize+len(data):], make([]byte, initPacketDataSize-len(data)); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -86,12 +95,15 @@ func assertSingleReportRequest(t testing.TB, written []byte, cid ChannelID, cmd 
 
 func receive[T any](t testing.TB, ch <-chan T, message string) T {
 	t.Helper()
+
 	select {
 	case value := <-ch:
 		return value
 	case <-time.After(time.Second):
 		t.Fatal(message)
+
 		var zero T
+
 		return zero
 	}
 }

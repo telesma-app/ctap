@@ -17,6 +17,7 @@ var respPackets = []string{
 func TestNewMessage(t *testing.T) {
 	// Write packets into a buffer
 	buf := bytes.NewBuffer(nil)
+
 	responsePackets := make([][]byte, 0, len(respPackets))
 	for _, pStr := range respPackets {
 		p, err := base64.StdEncoding.DecodeString(pStr)
@@ -32,6 +33,7 @@ func TestNewMessage(t *testing.T) {
 
 	// Read a message from it
 	m := new(Message)
+
 	_, err := m.ReadFrom(buf)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -40,6 +42,7 @@ func TestNewMessage(t *testing.T) {
 	{
 		// Write it back to another buffer
 		buf := bytes.NewBuffer(nil)
+
 		_, err = m.WriteTo(buf)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -55,6 +58,7 @@ func TestNewMessage(t *testing.T) {
 			if got, want := chunk[0], byte(0); got != want {
 				t.Errorf("got %#v, want %#v", got, want)
 			}
+
 			if got, want := chunk[1:], expectedPacket; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 				t.Errorf("got %#v, want %#v", got, want)
 			}
@@ -79,19 +83,23 @@ func TestNewMessageFramesSpecPayloadBoundaries(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			payload := bytes.Repeat([]byte{0xaa}, tc.payloadLen)
+
 			msg, err := NewMessage(cid, CTAPHID_PING, payload)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got, want := len(msg), tc.packetCount; got != want {
 				t.Fatalf("got length %d, want %d", got, want)
 			}
 
 			buf := bytes.NewBuffer(nil)
+
 			n, err := msg.WriteTo(buf)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got, want := n, int64(tc.packetCount*hidReportPacketSize); got != want {
 				t.Fatalf("got %#v, want %#v", got, want)
 			}
@@ -116,6 +124,7 @@ func TestNewMessageFramesSpecPayloadBoundaries(t *testing.T) {
 					if got, want := raw[4], byte(CTAPHID_PING)|INIT_PACKET_BIT; got != want {
 						t.Errorf("got %#v, want %#v; context: %s", got, want, "init command byte")
 					}
+
 					if got, want := binary.BigEndian.Uint16(raw[5:7]), uint16(tc.payloadLen); got != want {
 						t.Errorf("got %#v, want %#v; context: %s", got, want, "BCNT")
 					}
@@ -124,9 +133,11 @@ func TestNewMessageFramesSpecPayloadBoundaries(t *testing.T) {
 					if got, want := raw[initPacketHeaderSize:initPacketHeaderSize+dataLen], payload[:dataLen]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 						t.Errorf("got %#v, want %#v", got, want)
 					}
+
 					if got, want := raw[initPacketHeaderSize+dataLen:], make([]byte, initPacketDataSize-dataLen); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 						t.Errorf("got %#v, want %#v", got, want)
 					}
+
 					continue
 				}
 
@@ -136,10 +147,12 @@ func TestNewMessageFramesSpecPayloadBoundaries(t *testing.T) {
 				}
 
 				offset := initPacketDataSize + sequence*continuationPacketDataSize
+
 				dataLen := min(tc.payloadLen-offset, continuationPacketDataSize)
 				if got, want := raw[continuationPacketHeaderSize:continuationPacketHeaderSize+dataLen], payload[offset:offset+dataLen]; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 					t.Errorf("got %#v, want %#v", got, want)
 				}
+
 				if got, want := raw[continuationPacketHeaderSize+dataLen:], make([]byte, continuationPacketDataSize-dataLen); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 					t.Errorf("got %#v, want %#v", got, want)
 				}
@@ -153,6 +166,7 @@ func TestNewMessageRejectsPayloadAboveSpecMaximum(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if got := errors.Is(err, ErrMessageTooLarge); !got {
 		t.Errorf("got false, want true")
 	}

@@ -54,6 +54,7 @@ func (d *channelDevice) Read(ctx context.Context, p []byte) (int, error) {
 		if report != nil {
 			return copy(p, report), nil
 		}
+
 		if err != nil {
 			return 0, err
 		}
@@ -99,12 +100,14 @@ func (d *channelDevice) readReports() {
 	defer close(d.stopped)
 
 	reader := ghid.WithContext(d.ctx, d.device)
+
 	for {
 		report := make([]byte, hidPacketSize)
 		if _, err := io.ReadFull(reader, report); err != nil {
 			d.finish(err)
 			return
 		}
+
 		if d.enqueue(report) {
 			d.notify()
 		}
@@ -121,6 +124,7 @@ func (d *channelDevice) nextReport() ([]byte, error) {
 
 	report := d.pending[0]
 	d.pending[0] = nil
+
 	d.pending = d.pending[1:]
 	if len(d.pending) == 0 {
 		d.pending = nil
@@ -135,11 +139,13 @@ func (d *channelDevice) enqueue(report []byte) bool {
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
 	if cid != d.cid {
 		return false
 	}
 
 	d.pending = append(d.pending, report)
+
 	return true
 }
 

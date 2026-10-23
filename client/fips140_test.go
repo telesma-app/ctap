@@ -55,10 +55,12 @@ func TestFIPS140MakeCredentialFiltersAlgorithms(t *testing.T) {
 	if command != protocol.AuthenticatorMakeCredential {
 		t.Fatalf("command = %v, want %v", command, protocol.AuthenticatorMakeCredential)
 	}
+
 	var request protocol.AuthenticatorMakeCredentialRequest
 	if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 		t.Fatalf("decode request: %v", err)
 	}
+
 	got := make([]cose.Algorithm, 0, len(request.PubKeyCredParams))
 	for _, parameter := range request.PubKeyCredParams {
 		got = append(got, parameter.Algorithm)
@@ -120,6 +122,7 @@ func TestFIPS140MakeCredentialRejectsWithoutApprovedAlgorithmBeforeIO(t *testing
 		nil,
 	)
 	assertClientFIPS140NotAllowed(t, err)
+
 	if writes := fake.Writes(); len(writes) != 0 {
 		t.Fatalf("transport writes = %x, want none", writes)
 	}
@@ -134,6 +137,7 @@ func TestFIPS140RawClientAllowsPreviewSign(t *testing.T) {
 			AuthDataRaw: makeCredentialAuthData(t, testP256CredentialKey(cose.AlgorithmES256)),
 		}))
 		algorithms := []cose.Algorithm{cose.AlgorithmES256K, cose.AlgorithmES256, cose.AlgorithmRS1}
+
 		_, err := newTestClient(t, fake).MakeCredential(
 			context.Background(),
 			0,
@@ -160,6 +164,7 @@ func TestFIPS140RawClientAllowsPreviewSign(t *testing.T) {
 		if err != nil {
 			t.Fatalf("MakeCredential: %v", err)
 		}
+
 		if got, want := algorithms, []cose.Algorithm{cose.AlgorithmES256K, cose.AlgorithmES256, cose.AlgorithmRS1}; !slices.Equal(got, want) {
 			t.Fatalf("input algorithms = %v, want %v", got, want)
 		}
@@ -168,10 +173,12 @@ func TestFIPS140RawClientAllowsPreviewSign(t *testing.T) {
 		if command != protocol.AuthenticatorMakeCredential {
 			t.Fatalf("command = %v, want %v", command, protocol.AuthenticatorMakeCredential)
 		}
+
 		var request protocol.AuthenticatorMakeCredentialRequest
 		if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
+
 		if got, want := request.Extensions.PreviewSign.Algorithms, []cose.Algorithm{cose.AlgorithmES256}; !slices.Equal(got, want) {
 			t.Fatalf("previewSign algorithms = %v, want %v", got, want)
 		}
@@ -182,6 +189,7 @@ func TestFIPS140RawClientAllowsPreviewSign(t *testing.T) {
 			AuthDataRaw: minimalAuthData(),
 			Signature:   []byte{1},
 		}))
+
 		var gotErr error
 		for _, err := range newTestClient(t, fake).GetAssertion(
 			context.Background(),
@@ -202,6 +210,7 @@ func TestFIPS140RawClientAllowsPreviewSign(t *testing.T) {
 		) {
 			gotErr = err
 		}
+
 		if gotErr != nil {
 			t.Fatalf("GetAssertion: %v", gotErr)
 		}
@@ -210,10 +219,12 @@ func TestFIPS140RawClientAllowsPreviewSign(t *testing.T) {
 		if command != protocol.AuthenticatorGetAssertion {
 			t.Fatalf("command = %v, want %v", command, protocol.AuthenticatorGetAssertion)
 		}
+
 		var request protocol.AuthenticatorGetAssertionRequest
 		if err := cbor.Unmarshal(requestCBOR, &request); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
+
 		if request.Extensions.PreviewSign.KeyHandle == nil || request.Extensions.PreviewSign.ToBeSigned == nil {
 			t.Fatalf("previewSign signing input was not preserved: %#v", request.Extensions.PreviewSign)
 		}
@@ -263,6 +274,7 @@ func TestFIPS140RawClientRejectsProtocolOneHMACSecretBeforeIO(t *testing.T) {
 					0,
 					nil,
 				)
+
 				return err
 			},
 		},
@@ -290,6 +302,7 @@ func TestFIPS140RawClientRejectsProtocolOneHMACSecretBeforeIO(t *testing.T) {
 				) {
 					return err
 				}
+
 				return errors.New("GetAssertion yielded no policy error")
 			},
 		},
@@ -301,6 +314,7 @@ func TestFIPS140RawClientRejectsProtocolOneHMACSecretBeforeIO(t *testing.T) {
 				fake := testhid.NewCBORDevice(t, testCID)
 				err := operation.invoke(t, newTestClient(t, fake), protocolCase.pinUvAuthProtocol)
 				assertClientFIPS140NotAllowed(t, err)
+
 				if writes := fake.Writes(); len(writes) != 0 {
 					t.Fatalf("transport writes = %x, want none", writes)
 				}
@@ -336,6 +350,7 @@ func TestFIPS140ClientRejectsPinUvAuthProtocolOneBeforeIO(t *testing.T) {
 					0,
 					nil,
 				)
+
 				return err
 			},
 		},
@@ -354,6 +369,7 @@ func TestFIPS140ClientRejectsPinUvAuthProtocolOneBeforeIO(t *testing.T) {
 				) {
 					return err
 				}
+
 				return errors.New("GetAssertion yielded no policy error")
 			},
 		},
@@ -403,6 +419,7 @@ func TestFIPS140ClientRejectsPinUvAuthProtocolOneBeforeIO(t *testing.T) {
 			fake := testhid.NewCBORDevice(t, testCID)
 			err := test.invoke(t, newTestClient(t, fake))
 			assertClientFIPS140NotAllowed(t, err)
+
 			if writes := fake.Writes(); len(writes) != 0 {
 				t.Fatalf("transport writes = %x, want none", writes)
 			}
@@ -416,10 +433,12 @@ func TestFIPS140GetPINRetriesAllowsOmittedProtocol(t *testing.T) {
 	fake := testhid.NewCBORDevice(t, testCID, encodeCBOR(t, protocol.AuthenticatorClientPINResponse{
 		PinRetries: new(uint(8)),
 	}))
+
 	retries, _, err := newTestClient(t, fake).GetPINRetries(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("GetPINRetries: %v", err)
 	}
+
 	if got, want := retries, uint(8); got != want {
 		t.Fatalf("retries = %d, want %d", got, want)
 	}
@@ -435,6 +454,7 @@ func TestFIPS140GetPINRetriesAllowsOmittedProtocol(t *testing.T) {
 
 func requireFIPS140(t testing.TB) {
 	t.Helper()
+
 	if !cryptofips140.Enabled() {
 		t.Skip("requires Go FIPS 140-3 mode")
 	}
@@ -442,6 +462,7 @@ func requireFIPS140(t testing.TB) {
 
 func assertClientFIPS140NotAllowed(t testing.TB, err error) {
 	t.Helper()
+
 	if !errors.Is(err, ctapfips140.ErrNotAllowed) {
 		t.Fatalf("error = %v, want errors.Is(error, %v)", err, ctapfips140.ErrNotAllowed)
 	}

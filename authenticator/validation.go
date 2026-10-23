@@ -15,10 +15,11 @@ import (
 
 func validateHMACGetSecretSalts(input webauthn.HMACGetSecretInput) error {
 	if len(input.Salt1) != 32 {
-		return newErrorMessage(ErrInvalidSaltSize, "salt1 must be exactly 32 bytes")
+		return &ErrorWithMessage{Err: ErrInvalidSaltSize, Message: "salt1 must be exactly 32 bytes"}
 	}
+
 	if input.Salt2 != nil && len(input.Salt2) != 32 {
-		return newErrorMessage(ErrInvalidSaltSize, "salt2 must be exactly 32 bytes when present")
+		return &ErrorWithMessage{Err: ErrInvalidSaltSize, Message: "salt2 must be exactly 32 bytes when present"}
 	}
 
 	return nil
@@ -30,18 +31,17 @@ func (d *Device) normalizeAndValidateCurrentPIN(value string) (string, error) {
 
 func (d *Device) normalizeAndValidateNewPIN(value string) (string, error) {
 	minPINLength := d.info.EffectiveMinPINLength()
+
 	maxPINLength := d.info.EffectiveMaxPINLength()
 	if maxPINLength < minPINLength {
-		return "", newErrorMessage(
-			ErrSpecViolation,
-			fmt.Sprintf("maximum PIN length %d is less than minimum PIN length %d", maxPINLength, minPINLength),
-		)
+		return "", &ErrorWithMessage{Err: ErrSpecViolation, Message: fmt.Sprintf("maximum PIN length %d is less than minimum PIN length %d", maxPINLength, minPINLength)}
 	}
 
 	value, err := pin.NormalizeAndValidate(value, minPINLength)
 	if err != nil {
 		return "", err
 	}
+
 	if uint(utf8.RuneCountInString(value)) > maxPINLength {
 		return "", fmt.Errorf("pin must contain at most %d Unicode code points", maxPINLength)
 	}
@@ -58,10 +58,7 @@ func (d *Device) pinPolicyError(err error) error {
 		return err
 	}
 
-	return newErrorMessage(
-		err,
-		"PIN policy details: "+d.info.PinComplexityPolicyURLString(),
-	)
+	return &ErrorWithMessage{Err: err, Message: "PIN policy details: " + d.info.PinComplexityPolicyURLString()}
 }
 
 func validateSetMinPINLength(
@@ -70,30 +67,33 @@ func validateSetMinPINLength(
 ) error {
 	if params.NewMinPINLength != nil {
 		if *params.NewMinPINLength < info.EffectiveMinPINLength() {
-			return newErrorMessage(SyntaxError, "new minimum PIN length cannot decrease the current minimum")
+			return &ErrorWithMessage{Err: SyntaxError, Message: "new minimum PIN length cannot decrease the current minimum"}
 		}
+
 		if *params.NewMinPINLength > info.EffectiveMaxPINLength() {
-			return newErrorMessage(SyntaxError, "new minimum PIN length exceeds the maximum PIN length")
+			return &ErrorWithMessage{Err: SyntaxError, Message: "new minimum PIN length exceeds the maximum PIN length"}
 		}
 	}
 
 	if len(params.MinPINLengthRPIDs) != 0 {
 		if info.MaxRPIDsForSetMinPINLength != nil &&
 			uint(len(params.MinPINLengthRPIDs)) > *info.MaxRPIDsForSetMinPINLength {
-			return newErrorMessage(SyntaxError, "too many RP IDs for setMinPINLength")
+			return &ErrorWithMessage{Err: SyntaxError, Message: "too many RP IDs for setMinPINLength"}
 		}
+
 		if !slices.Contains(info.Extensions, extension.ExtensionIdentifierMinPinLength) &&
 			!slices.Contains(info.Extensions, extension.ExtensionIdentifierPinComplexityPolicy) {
-			return newErrorMessage(ErrNotSupported, "device doesn't support PIN policy RP IDs")
+			return &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support PIN policy RP IDs"}
 		}
 	}
 
 	if params.PINComplexityPolicy && info.PinComplexityPolicy == nil {
-		return newErrorMessage(ErrNotSupported, "device doesn't support pinComplexityPolicy")
+		return &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support pinComplexityPolicy"}
 	}
+
 	if params.ForceChangePIN &&
 		!info.Options[protocol.OptionClientPIN] {
-		return newErrorMessage(ErrPinNotSet, "cannot force a PIN change before a PIN is set")
+		return &ErrorWithMessage{Err: ErrPinNotSet, Message: "cannot force a PIN change before a PIN is set"}
 	}
 
 	return nil

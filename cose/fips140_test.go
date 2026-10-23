@@ -47,10 +47,12 @@ func TestFIPS140SignatureGate(t *testing.T) {
 				assertFIPS140NotAllowed(t, err)
 			})
 		}
+
 		t.Run("large RSA exponent", func(t *testing.T) {
 			if strconv.IntSize == 32 {
 				t.Skip("requires a 64-bit int")
 			}
+
 			exponent := int64(math.MaxInt32) + 2
 			publicKey := &rsa.PublicKey{N: fips140TestRSAModulus(2048), E: int(exponent)}
 			err := VerifySignature(publicKey, AlgorithmRS256, nil, nil)
@@ -121,6 +123,7 @@ func TestFIPS140SignatureGate(t *testing.T) {
 		if !errors.Is(err, ErrUnsupportedAlgorithm) {
 			t.Fatalf("VerifySignature error = %v, want %v", err, ErrUnsupportedAlgorithm)
 		}
+
 		if errors.Is(err, ctapfips140.ErrNotAllowed) {
 			t.Fatalf("VerifySignature error = %v, must not be a FIPS policy rejection", err)
 		}
@@ -128,6 +131,7 @@ func TestFIPS140SignatureGate(t *testing.T) {
 
 	t.Run("unhandled classifications fail closed", func(t *testing.T) {
 		publicKey := ed25519.PublicKey(make([]byte, ed25519.PublicKeySize))
+
 		for _, test := range []struct {
 			name      string
 			algorithm Algorithm
@@ -151,13 +155,16 @@ func TestFIPS140SignatureGate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("generate Ed25519 key: %v", err)
 		}
+
 		message := []byte("FIPS 140-3 Ed25519 verification")
 		signature := ed25519.Sign(privateKey, message)
 		key := credentialKey(privateKey, AlgorithmEdDSA)
+
 		publicKey, err := key.PublicKey()
 		if err != nil {
 			t.Fatalf("PublicKey: %v", err)
 		}
+
 		if err := VerifySignature(publicKey, AlgorithmEdDSA, message, signature); err != nil {
 			t.Fatalf("VerifySignature: %v", err)
 		}
@@ -166,9 +173,11 @@ func TestFIPS140SignatureGate(t *testing.T) {
 
 func assertFIPS140NotAllowed(t testing.TB, err error) {
 	t.Helper()
+
 	if !errors.Is(err, ctapfips140.ErrNotAllowed) {
 		t.Fatalf("error = %v, want errors.Is(error, %v)", err, ctapfips140.ErrNotAllowed)
 	}
+
 	var notAllowed *ctapfips140.PolicyError
 	if !errors.As(err, &notAllowed) {
 		t.Fatalf("error type = %T, want *fips140.PolicyError", err)
@@ -208,10 +217,12 @@ func TestFIPS140AlgorithmClassification(t *testing.T) {
 			t.Errorf("algorithm %d is not classified by this test; classify it and update want", algorithm)
 			continue
 		}
+
 		if spec.fips != expected {
 			t.Errorf("algorithm %d classification = %d, want %d", algorithm, spec.fips, expected)
 		}
 	}
+
 	for algorithm := range want {
 		if _, registered := signatureAlgorithms[algorithm]; !registered {
 			t.Errorf("algorithm %d is classified by this test but not registered", algorithm)

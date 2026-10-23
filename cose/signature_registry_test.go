@@ -44,10 +44,12 @@ func TestRegistryCredentialKeysCBORRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate secp256k1 key: %v", err)
 	}
+
 	_, ed448Key, err := ed448.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate Ed448 key: %v", err)
 	}
+
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generate RSA key: %v", err)
@@ -57,7 +59,9 @@ func TestRegistryCredentialKeysCBORRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create CTAP2 encoding mode: %v", err)
 	}
+
 	message := []byte("registry CBOR round trip")
+
 	tests := []struct {
 		name      string
 		algorithm Algorithm
@@ -73,14 +77,17 @@ func TestRegistryCredentialKeysCBORRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatalf("encode credential key: %v", err)
 			}
+
 			var decoded Key
 			if err := cbor.Unmarshal(encoded, &decoded); err != nil {
 				t.Fatalf("decode credential key: %v", err)
 			}
+
 			publicKey, err := decoded.PublicKey()
 			if err != nil {
 				t.Fatalf("convert public key: %v", err)
 			}
+
 			signature := signTestMessage(t, test.key, test.algorithm, message)
 			if err := VerifySignature(publicKey, test.algorithm, message, signature); err != nil {
 				t.Fatalf("verify signature: %v", err)
@@ -95,18 +102,22 @@ func TestRegistryCredentialKeyAlgorithmMismatch(t *testing.T) {
 	}
 
 	p256 := generateECDSAKey(t, elliptic.P256())
+
 	secp256k1Key, err := secp256k1.GeneratePrivateKey()
 	if err != nil {
 		t.Fatalf("generate secp256k1 key: %v", err)
 	}
+
 	_, ed25519Key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate Ed25519 key: %v", err)
 	}
+
 	_, ed448Key, err := ed448.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate Ed448 key: %v", err)
 	}
+
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generate RSA key: %v", err)
@@ -133,15 +144,19 @@ func TestRegistryCredentialKeyAlgorithmMismatch(t *testing.T) {
 	if err := VerifySignature(secp256k1Key.PubKey(), AlgorithmES256, message, nil); !errors.Is(err, ErrKeyAlgorithmMismatch) {
 		t.Fatalf("secp256k1/ES256 error = %v, want %v", err, ErrKeyAlgorithmMismatch)
 	}
+
 	if err := VerifySignature(&p256.PublicKey, AlgorithmES256K, message, nil); !errors.Is(err, ErrKeyAlgorithmMismatch) {
 		t.Fatalf("P-256/ES256K error = %v, want %v", err, ErrKeyAlgorithmMismatch)
 	}
+
 	if err := VerifySignature(ed448Key.Public(), AlgorithmEd25519, message, nil); !errors.Is(err, ErrKeyAlgorithmMismatch) {
 		t.Fatalf("Ed448/Ed25519 error = %v, want %v", err, ErrKeyAlgorithmMismatch)
 	}
+
 	if err := VerifySignature(ed25519Key.Public(), AlgorithmEdDSA, message, []byte("invalid")); !errors.Is(err, ErrInvalidSignature) {
 		t.Fatalf("Ed25519/EdDSA error = %v, want %v", err, ErrInvalidSignature)
 	}
+
 	if err := VerifySignature(&rsaKey.PublicKey, AlgorithmES256K, message, nil); !errors.Is(err, ErrKeyAlgorithmMismatch) {
 		t.Fatalf("RSA/ES256K error = %v, want %v", err, ErrKeyAlgorithmMismatch)
 	}
@@ -156,6 +171,7 @@ func TestRegistryCredentialPublicKeyValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate Ed448 key: %v", err)
 	}
+
 	secp256k1Key, err := secp256k1.GeneratePrivateKey()
 	if err != nil {
 		t.Fatalf("generate secp256k1 key: %v", err)
@@ -163,6 +179,7 @@ func TestRegistryCredentialPublicKeyValidation(t *testing.T) {
 
 	ed448Credential := credentialKey(ed448Key, AlgorithmEdDSA)
 	secp256k1Credential := credentialKey(secp256k1Key, AlgorithmES256K)
+
 	tests := []struct {
 		name   string
 		key    Key
@@ -199,6 +216,7 @@ func TestRegistryCredentialPublicKeyValidation(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			key := cloneKey(test.key)
 			test.mutate(key)
+
 			if _, err := key.PublicKey(); err == nil {
 				t.Fatal("PublicKey succeeded")
 			}
@@ -215,16 +233,19 @@ func TestRegistryVerifySignatureRejectsMalformedSignatures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate secp256k1 key: %v", err)
 	}
+
 	_, ed448Key, err := ed448.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate Ed448 key: %v", err)
 	}
+
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generate RSA key: %v", err)
 	}
 
 	message := []byte("malformed registry signature")
+
 	tests := []struct {
 		name      string
 		publicKey any

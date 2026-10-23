@@ -74,6 +74,7 @@ func renderDiagnostic(
 	}
 
 	var subCommand uint64
+
 	message.Notation, subCommand, err = formatter.render(
 		raw,
 		schema.typeInfo,
@@ -83,6 +84,7 @@ func renderDiagnostic(
 	if err != nil {
 		message.Notation = ""
 		message.Error = err.Error()
+
 		return message, 0
 	}
 
@@ -110,6 +112,7 @@ func (f *diagnosticFormatter) render(
 		}
 
 		childSchema := collectionElementType(schema)
+
 		if len(values) == 0 {
 			return "[]", 0, nil
 		}
@@ -126,9 +129,11 @@ func (f *diagnosticFormatter) render(
 			}
 
 			builder.WriteString(notation)
+
 			if index < len(values)-1 {
 				builder.WriteByte(',')
 			}
+
 			builder.WriteByte('\n')
 		}
 
@@ -173,6 +178,7 @@ func (f *diagnosticFormatter) renderMap(
 	}
 
 	entries := make([]entry, 0, len(values))
+
 	var subCommand uint64
 
 	for key, value := range values {
@@ -201,6 +207,7 @@ func (f *diagnosticFormatter) renderMap(
 
 		return bytes.Compare(a.keyCBOR, b.keyCBOR)
 	})
+
 	if len(entries) == 0 {
 		return "{}", subCommand, nil
 	}
@@ -230,7 +237,9 @@ func (f *diagnosticFormatter) renderMap(
 		builder.WriteString(": ")
 
 		childSchema := mapValueType
+
 		var valueNotation string
+
 		if key, ok := entry.key.(string); ok {
 			if variant := f.mapValueTypes[diagnosticMapValueKey{path: path, key: key}]; variant != nil {
 				childSchema = variant
@@ -250,6 +259,7 @@ func (f *diagnosticFormatter) renderMap(
 				if err != nil {
 					return "", 0, err
 				}
+
 				f.redacted = append(f.redacted, entry.field.path)
 			}
 		}
@@ -267,9 +277,11 @@ func (f *diagnosticFormatter) renderMap(
 		}
 
 		builder.WriteString(valueNotation)
+
 		if index < len(entries)-1 {
 			builder.WriteByte(',')
 		}
+
 		builder.WriteByte('\n')
 	}
 
@@ -372,6 +384,7 @@ func (f *diagnosticFormatter) collectFields(
 
 		cborTag := fieldInfo.Tag.Get("cbor")
 		cborParts := strings.Split(cborTag, ",")
+
 		wireName := cborParts[0]
 		if wireName == "-" {
 			continue
@@ -390,6 +403,7 @@ func (f *diagnosticFormatter) collectFields(
 		}
 
 		integerKey := slices.Contains(cborParts[1:], "keyasint")
+
 		var wireKey any = wireName
 		if integerKey {
 			value, err := strconv.ParseInt(wireName, 10, 64)
@@ -425,6 +439,7 @@ func (f *diagnosticFormatter) collectFields(
 
 func diagnosticTag(field reflect.StructField) (string, bool, error) {
 	name := lowerCamel(field.Name)
+
 	tag, ok := field.Tag.Lookup("ctapdiag")
 	if !ok {
 		return name, false, nil
@@ -436,6 +451,7 @@ func diagnosticTag(field reflect.StructField) (string, bool, error) {
 	}
 
 	redact := false
+
 	for _, option := range parts[1:] {
 		switch option {
 		case "":
@@ -459,6 +475,7 @@ func lowerCamel(name string) string {
 	for end < len(runes) && unicode.IsUpper(runes[end]) {
 		end++
 	}
+
 	if end > 1 && end < len(runes) && unicode.IsLower(runes[end]) {
 		end--
 	}

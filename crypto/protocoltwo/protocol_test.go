@@ -23,10 +23,12 @@ func TestKDF(t *testing.T) {
 	// Create a deterministic shared secret
 	sharedSecret := make([]byte, 32)
 	r := rand.New(rand.NewSource(0))
+
 	_, err = r.Read(sharedSecret)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	wantSharedSecret := slices.Clone(sharedSecret)
 
 	// Create derived with a shared secret
@@ -34,6 +36,7 @@ func TestKDF(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := sharedSecret, wantSharedSecret; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -89,6 +92,7 @@ func TestEncryptDecrypt(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := decrypted, plaintext; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -105,6 +109,7 @@ func TestEncryptDecrypt(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := decrypted, longPlaintext; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -145,6 +150,7 @@ func TestAuthenticate(t *testing.T) {
 	if got, want := len(mac), 32; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := base64.StdEncoding.EncodeToString(mac), messageAuthenticationCode; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}

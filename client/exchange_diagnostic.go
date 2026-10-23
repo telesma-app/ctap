@@ -33,16 +33,12 @@ func (cl *Client) emitDiagnostic(
 	response ctaptransport.CBORResponse,
 	err error,
 ) {
-	var command protocol.Command
-	var requestBody []byte
-	if len(data) > 0 {
-		command = protocol.Command(data[0])
-		requestBody = data[1:]
-	}
-
+	command := protocol.Command(data[0])
+	requestBody := data[1:]
 	requestSchema, responseSchema := exchangeSchemas(command)
 	request, subCommand := renderDiagnostic(cl.decMode, cl.encMode, requestBody, requestSchema)
 	responseDiagnostic, _ := renderDiagnostic(cl.decMode, cl.encMode, response.Data, responseSchema)
+
 	event := diagnostic.Exchange{
 		StartedAt:  started.UTC(),
 		Duration:   duration,
@@ -154,6 +150,7 @@ func exchangeStatus(
 	if ctapErr, ok := errors.AsType[*ctaptransport.CTAPError](err); ok {
 		return ctapErr.StatusCode, true
 	}
+
 	if err == nil {
 		return response.StatusCode, true
 	}

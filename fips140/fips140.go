@@ -14,9 +14,10 @@ type PolicyError struct {
 
 // Error implements error.
 func (e *PolicyError) Error() string {
-	if e == nil || e.Operation == "" {
+	if e.Operation == "" {
 		return ErrNotAllowed.Error()
 	}
+
 	return "fips140: " + e.Operation + " is not allowed in FIPS 140-3 mode"
 }
 

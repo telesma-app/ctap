@@ -36,18 +36,22 @@ func TestWebAuthnPRFReferenceVectors(t *testing.T) {
 	if got, want := salts, slices.Concat(firstSalt, secondSalt); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := hmacSHA256(credentialRandom, firstSalt), firstOutput; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := hmacSHA256(credentialRandom, secondSalt), secondOutput; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
 
 	curve := ecdh.P256()
+
 	privateKey, err := curve.NewPrivateKey(platformPrivateKey)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	publicKey, err := curve.NewPublicKey(slices.Concat(
 		[]byte{0x04},
 		authenticatorPublicKeyX,
@@ -56,6 +60,7 @@ func TestWebAuthnPRFReferenceVectors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	ecdhSecret, err := privateKey.ECDH(publicKey)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -76,6 +81,7 @@ func TestWebAuthnPRFReferenceVectors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := gotSaltEnc, saltEnc; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -86,6 +92,7 @@ func TestWebAuthnPRFReferenceVectors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := sharedSecret, decodePRFVector(t, "0c63083de8170101d38bcf8bd72309568ddb4550867e23404b35d85712f7c20d8bc911ee23c06034cbc14290b9669bec07739053c5a416e313ef905c79955876"); (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -128,12 +135,14 @@ func decodePRFVector(t *testing.T, value string) []byte {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return decoded
 }
 
 func hmacSHA256(key, input []byte) []byte {
 	hasher := hmac.New(sha256.New, key)
 	hasher.Write(input)
+
 	return hasher.Sum(nil)
 }
 
@@ -150,6 +159,7 @@ func assertPRFVectorDecryption(
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := got, want; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}

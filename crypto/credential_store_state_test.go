@@ -34,8 +34,10 @@ func encryptGetInfoMember(
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	ciphertext := make([]byte, aes.BlockSize)
 	cipher.NewCBCEncrypter(block, iv).CryptBlocks(ciphertext, plaintext)
+
 	return append(bytes.Clone(iv), ciphertext...)
 }
 
@@ -66,6 +68,7 @@ func TestDecryptDeviceIdentifierAndCredentialStoreState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := gotDeviceIdentifier[:], deviceIdentifier; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -77,6 +80,7 @@ func TestDecryptDeviceIdentifierAndCredentialStoreState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := gotCredentialStoreState[:], credentialStoreState; (got == nil) != (want == nil) || !bytes.Equal(got, want) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -85,6 +89,7 @@ func TestDecryptDeviceIdentifierAndCredentialStoreState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := wrongLabel[:], deviceIdentifier; (got == nil) == (want == nil) && bytes.Equal(got, want) {
 		t.Errorf("got %#v, want a value different from %#v", got, want)
 	}
@@ -107,6 +112,7 @@ func TestDecryptCredentialStoreStateAcceptsRegeneratedIV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	second, err := DecryptCredentialStoreState(
 		persistentPinUvAuthToken,
 		encryptGetInfoMember(
@@ -131,6 +137,7 @@ func TestDecryptGetInfoMembersValidateInput(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "persistentPinUvAuthToken must not be empty"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -139,6 +146,7 @@ func TestDecryptGetInfoMembersValidateInput(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "persistentPinUvAuthToken must be a positive multiple of 16 bytes"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -147,6 +155,7 @@ func TestDecryptGetInfoMembersValidateInput(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "encIdentifier must be exactly 32 bytes"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -155,6 +164,7 @@ func TestDecryptGetInfoMembersValidateInput(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
+
 	if container, element := err.Error(), "encCredStoreState must be exactly 32 bytes"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}

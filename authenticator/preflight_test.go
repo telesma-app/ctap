@@ -78,6 +78,7 @@ func TestBioEnrollmentPreviewAbsentIsNotSupported(t *testing.T) {
 	if err, target := err, ErrNotSupported; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
+
 	assertNoAuthenticatorIO(t, fake)
 }
 
@@ -95,6 +96,7 @@ func TestProtectedSubcommandsRejectMissingOrMalformedTokenBeforeCommand(t *testi
 		if err, target := err, ErrPinUvAuthTokenRequired; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -111,6 +113,7 @@ func TestProtectedSubcommandsRejectMissingOrMalformedTokenBeforeCommand(t *testi
 		if err, target := err, ErrPinUvAuthTokenRequired; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -127,6 +130,7 @@ func TestProtectedSubcommandsRejectMissingOrMalformedTokenBeforeCommand(t *testi
 		if err, target := err, SyntaxError; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 }
@@ -144,6 +148,7 @@ func TestPinUvAuthTokenLengthUsesCTAPVersion(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := got, protocol.PinUvAuthProtocolOne; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -171,6 +176,7 @@ func TestPinUvAuthTokenLengthUsesCTAPVersion(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := got, protocol.PinUvAuthProtocolOne; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -311,12 +317,14 @@ func TestSelectPinTokenFlowUsingPIN(t *testing.T) {
 				if err, target := err, tt.wantErr; !errors.Is(err, target) {
 					t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 				}
+
 				return
 			}
 
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got, want := flow, tt.wantFlow; got != want {
 				t.Errorf("got %#v, want %#v", got, want)
 			}
@@ -347,10 +355,12 @@ func TestSelectPinUvAuthTokenFlowUsingUV(t *testing.T) {
 		}
 
 		info.Options[protocol.OptionUvBioEnroll] = true
+
 		flow, err := selectPinUvAuthTokenFlowUsingUV(info, protocol.PermissionBioEnrollment, "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := flow, uvTokenFlowWithPermissions; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -370,10 +380,12 @@ func TestSelectPinUvAuthTokenFlowUsingUV(t *testing.T) {
 		}
 
 		info.Options[protocol.OptionAuthenticatorConfig] = true
+
 		flow, err := selectPinUvAuthTokenFlowUsingUV(info, protocol.PermissionAuthenticatorConfiguration, "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := flow, uvTokenFlowWithPermissions; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -389,6 +401,7 @@ func TestSelectPinUvAuthTokenFlowUsingUV(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := flow, uvTokenFlowWithPermissions; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -426,6 +439,7 @@ func TestSelectPinUvAuthTokenFlowUsingUV(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := flow, uvTokenFlowPreview; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -440,6 +454,7 @@ func TestSelectPinUvAuthTokenFlowUsingUV(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := flow, uvTokenFlowPreview; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -454,6 +469,7 @@ func TestSelectPinUvAuthTokenFlowUsingUV(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := flow, uvTokenFlowPreview; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -488,6 +504,7 @@ func TestSelectPinUvAuthTokenFlowUsingUV(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := flow, uvTokenFlowPreview; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -578,9 +595,11 @@ func TestSetLargeBlobsConditionalAuthorization(t *testing.T) {
 		if got, want := command, protocol.AuthenticatorLargeBlobs; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
+
 		if _, ok := request[uint64(5)]; ok {
 			t.Errorf("value unexpectedly contains %#v", uint64(5))
 		}
+
 		if _, ok := request[uint64(6)]; ok {
 			t.Errorf("value unexpectedly contains %#v", uint64(6))
 		}
@@ -599,6 +618,7 @@ func TestSetLargeBlobsConditionalAuthorization(t *testing.T) {
 		if err, target := err, ErrPinUvAuthTokenRequired; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 }
@@ -626,9 +646,11 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if got, want := command, protocol.AuthenticatorConfig; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
+
 		if _, ok := request[uint64(3)]; ok {
 			t.Errorf("value unexpectedly contains %#v", uint64(3))
 		}
+
 		if _, ok := request[uint64(4)]; ok {
 			t.Errorf("value unexpectedly contains %#v", uint64(4))
 		}
@@ -651,6 +673,7 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if err, target := err, ErrPinUvAuthTokenRequired; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -669,6 +692,7 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if err, target := err, ErrNotSupported; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -689,6 +713,7 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if err, target := err, ErrNotSupported; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -708,6 +733,7 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if err, target := err, ErrNotSupported; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -750,6 +776,7 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if _, ok := request[uint64(3)]; ok {
 			t.Errorf("value unexpectedly contains %#v", uint64(3))
 		}
+
 		if _, ok := request[uint64(4)]; ok {
 			t.Errorf("value unexpectedly contains %#v", uint64(4))
 		}
@@ -777,13 +804,16 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if got, want := len(requests), 1; got != want {
 			t.Fatalf("got length %d, want %d", got, want)
 		}
+
 		command, request := requests[0].CTAPRequestMap(t)
 		if got, want := command, protocol.AuthenticatorConfig; got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
+
 		if got, want := len(request), 1; got != want {
 			t.Errorf("got length %d, want %d", got, want)
 		}
+
 		if _, ok := request[uint64(1)]; !ok {
 			t.Errorf("value does not contain %#v", uint64(1))
 		}
@@ -805,6 +835,7 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if err, target := err, ErrNotSupported; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -825,6 +856,7 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if err, target := err, SyntaxError; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -846,6 +878,7 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if err, target := err, SyntaxError; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -865,6 +898,7 @@ func TestAuthenticatorConfigCapabilityAndAuthorization(t *testing.T) {
 		if err, target := err, ErrNotSupported; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 }
@@ -913,9 +947,11 @@ func TestGetAssertionRejectsUnadvertisedExtensions(t *testing.T) {
 			if err := gotErr; err == nil {
 				t.Fatalf("expected an error")
 			}
+
 			if got := errors.Is(gotErr, ErrNotSupported); !got {
 				t.Errorf("got false, want true")
 			}
+
 			assertNoAuthenticatorIO(t, fake)
 		})
 	}
@@ -953,6 +989,7 @@ func TestGetAssertionRejectsMalformedTokenBeforeExtensionKeyAgreement(t *testing
 	if err, target := gotErr, SyntaxError; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
+
 	assertNoAuthenticatorIO(t, fake)
 }
 
@@ -972,6 +1009,7 @@ func TestRetryQueriesWorkBeforePINOrUVConfiguration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := retries, uint(8); got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -993,6 +1031,7 @@ func TestRetryQueriesWorkBeforePINOrUVConfiguration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := retries, uint(5); got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
@@ -1034,11 +1073,13 @@ func TestRetryQueriesWorkBeforePINOrUVConfiguration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if got, want := retries, uint(5); got != want {
 			t.Errorf("got %#v, want %#v", got, want)
 		}
 
 		_, request := fake.FirstCTAPRequestMap(t)
+
 		_, present := request[uint64(1)]
 		if got := present; got {
 			t.Errorf("got true, want false")
@@ -1060,6 +1101,7 @@ func TestFIDO20RejectsCTAP21OnlyCommands(t *testing.T) {
 		if err, target := err, ErrNotSupported; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 
@@ -1073,6 +1115,7 @@ func TestFIDO20RejectsCTAP21OnlyCommands(t *testing.T) {
 		if err, target := err, ErrNotSupported; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
+
 		assertNoAuthenticatorIO(t, fake)
 	})
 }
@@ -1327,6 +1370,7 @@ func TestValidateMakeCredentialAuthorization(t *testing.T) {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
+
 				return
 			}
 
@@ -1541,6 +1585,7 @@ func TestValidateGetAssertionAuthorization(t *testing.T) {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
+
 				return
 			}
 
@@ -1572,9 +1617,11 @@ func TestGetAssertionValidatesAuthorizationBeforeCommand(t *testing.T) {
 		nil,
 	) {
 		count++
+
 		if !assertionResponseIsZero(assertion) {
 			t.Errorf("got %#v, want zero response", assertion)
 		}
+
 		if err, target := err, ErrPinUvAuthTokenRequired; !errors.Is(err, target) {
 			t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 		}
@@ -1583,5 +1630,6 @@ func TestGetAssertionValidatesAuthorizationBeforeCommand(t *testing.T) {
 	if got, want := count, 1; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	assertNoAuthenticatorIO(t, fake)
 }

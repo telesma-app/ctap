@@ -43,6 +43,7 @@ func NewMessage(cid ChannelID, cmd Command, data []byte) (Message, error) {
 // WriteTo writes the message to the device.
 func (m Message) WriteTo(w io.Writer) (int64, error) {
 	var total int64
+
 	for _, p := range m {
 		// We cannot write directly to the device because every writing should be a single packet.
 		buf := bufio.NewWriterSize(w, hidReportPacketSize)
@@ -51,6 +52,7 @@ func (m Message) WriteTo(w io.Writer) (int64, error) {
 		if err := buf.WriteByte(0x00); err != nil {
 			return 0, err
 		}
+
 		total += 1
 
 		// Packet itself.
@@ -58,6 +60,7 @@ func (m Message) WriteTo(w io.Writer) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
+
 		total += n
 
 		// Flush the buffer to the device.
@@ -79,30 +82,36 @@ func (p *packet) WriteTo(w io.Writer) (int64, error) {
 
 	// CMD or SEQ: offset 4; length 1
 	cmdOrSeqCnt := 0
+
 	if !p.continuation {
 		cmdCnt, err := w.Write([]byte{byte(p.command) | INIT_PACKET_BIT})
 		if err != nil {
 			return 0, err
 		}
+
 		cmdOrSeqCnt = cmdCnt
 	} else {
 		seqCnt, err := w.Write([]byte{p.sequence})
 		if err != nil {
 			return 0, err
 		}
+
 		cmdOrSeqCnt = seqCnt
 	}
 
 	// BCNTH and BCNTL: offset 5; length 2
 	// Only present in an init packet.
 	dataLenCnt := 0
+
 	if !p.continuation {
 		dataLen := make([]byte, 2)
 		binary.BigEndian.PutUint16(dataLen, p.length)
+
 		cnt, err := w.Write(dataLen)
 		if err != nil {
 			return 0, err
 		}
+
 		dataLenCnt = cnt
 	}
 
@@ -120,6 +129,7 @@ func (p *packet) WriteTo(w io.Writer) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
+
 		written += paddingCnt
 	}
 

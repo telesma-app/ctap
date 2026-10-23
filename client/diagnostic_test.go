@@ -24,6 +24,7 @@ func TestRenderDiagnosticRedactsTaggedFieldsAndShowsOtherFields(t *testing.T) {
 		RPID:              "engineers.example",
 	}
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(request)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -39,15 +40,19 @@ func TestRenderDiagnosticRedactsTaggedFieldsAndShowsOtherFields(t *testing.T) {
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if container, element := diagnostic.Notation, diagnosticRedacted; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "h'/[REDACTED]/'"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "engineers.example"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, hex.EncodeToString(secret); strings.Contains(container, element) {
 		t.Errorf("value unexpectedly contains %#v", element)
 	}
@@ -98,9 +103,11 @@ func TestDiagnosticRedactionPreservesCBORMajorType(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got, want := notation, test.want; got != want {
 				t.Errorf("got %#v, want %#v", got, want)
 			}
+
 			if container, element := notation, "secret-canary"; strings.Contains(container, element) {
 				t.Errorf("value unexpectedly contains %#v", element)
 			}
@@ -122,6 +129,7 @@ func TestRenderDiagnosticRedactsNestedExtensionFields(t *testing.T) {
 		},
 	}
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(request)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -137,9 +145,11 @@ func TestRenderDiagnosticRedactsNestedExtensionFields(t *testing.T) {
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if container, element := diagnostic.Notation, diagnosticRedacted; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, hex.EncodeToString(salt); strings.Contains(container, element) {
 		t.Errorf("value unexpectedly contains %#v", element)
 	}
@@ -156,6 +166,7 @@ func TestRenderDiagnosticRedactsNestedExtensionFields(t *testing.T) {
 
 func TestRenderDiagnosticPreservesUnknownFields(t *testing.T) {
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(map[uint64]any{
 		2:  uint64(protocol.ClientPINSubCommandGetPINRetries),
 		10: "engineers.example",
@@ -175,15 +186,19 @@ func TestRenderDiagnosticPreservesUnknownFields(t *testing.T) {
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if container, element := diagnostic.Notation, "engineers.example"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "unknown-field-canary"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "/subCommand/ 2:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "/rpId/ 10:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -191,6 +206,7 @@ func TestRenderDiagnosticPreservesUnknownFields(t *testing.T) {
 
 func TestRenderDiagnosticPreservesNestedUnknownFieldsAndRedactsKnownWrongType(t *testing.T) {
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(map[uint64]any{
 		2: uint64(protocol.ClientPINSubCommandGetPINRetries),
 		6: map[string]any{"unexpected": "secret-canary"},
@@ -212,15 +228,19 @@ func TestRenderDiagnosticPreservesNestedUnknownFieldsAndRedactsKnownWrongType(t 
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if got, want := subCommand, uint64(protocol.ClientPINSubCommandGetPINRetries); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if container, element := diagnostic.Notation, "nested-unknown-canary"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, diagnosticRedacted; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "secret-canary"; strings.Contains(container, element) {
 		t.Errorf("value unexpectedly contains %#v", element)
 	}
@@ -234,6 +254,7 @@ func TestRenderDiagnosticPreservesNestedUnknownFieldsAndRedactsKnownWrongType(t 
 
 func TestRenderDiagnosticUsesExplicitAndDerivedFieldNames(t *testing.T) {
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(map[uint64]any{
 		1: "none",
 		2: []byte("auth-data-canary"),
@@ -254,18 +275,23 @@ func TestRenderDiagnosticUsesExplicitAndDerivedFieldNames(t *testing.T) {
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if container, element := diagnostic.Notation, "/fmt/ 1:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "/authData/ 2:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "/attStmt/ 3:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "/epAtt/ 4:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "auth-data-canary"; strings.Contains(container, element) {
 		t.Errorf("value unexpectedly contains %#v", element)
 	}
@@ -292,10 +318,12 @@ func TestRenderDiagnosticRedactsPreviewSignDataToBeSigned(t *testing.T) {
 		},
 	}
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(request)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	requestSchema, _ := exchangeSchemas(protocol.AuthenticatorGetAssertion)
 
 	diagnostic, _ := renderDiagnostic(configured.DecMode, configured.EncMode, raw, requestSchema)
@@ -303,9 +331,11 @@ func TestRenderDiagnosticRedactsPreviewSignDataToBeSigned(t *testing.T) {
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if container, element := diagnostic.Notation, "key-handle-canary"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, hex.EncodeToString(toBeSigned); strings.Contains(container, element) {
 		t.Errorf("value unexpectedly contains %#v", element)
 	}
@@ -329,12 +359,14 @@ func TestRenderDiagnosticUsesProtocolSpellingOverrides(t *testing.T) {
 		{"templateId", 4, reflect.TypeFor[protocol.AuthenticatorBioEnrollmentResponse](), "/templateId/ 4:"},
 	}
 	configured := options.NewOptions()
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			raw, err := configured.EncMode.Marshal(map[uint64]any{test.key: "value"})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			diagnostic, _ := renderDiagnostic(
 				configured.DecMode,
 				configured.EncMode,
@@ -344,6 +376,7 @@ func TestRenderDiagnosticUsesProtocolSpellingOverrides(t *testing.T) {
 			if got := diagnostic.Error; len(got) != 0 {
 				t.Fatalf("got non-empty value %#v", got)
 			}
+
 			if container, element := diagnostic.Notation, test.want; !strings.Contains(container, element) {
 				t.Errorf("value does not contain %#v", element)
 			}
@@ -353,6 +386,7 @@ func TestRenderDiagnosticUsesProtocolSpellingOverrides(t *testing.T) {
 
 func TestRenderDiagnosticUsesConfigSubCommandParamsSchema(t *testing.T) {
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(map[uint64]any{
 		1: uint64(protocol.ConfigSubCommandSetMinPINLength),
 		2: map[uint64]any{
@@ -364,6 +398,7 @@ func TestRenderDiagnosticUsesConfigSubCommandParamsSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	requestSchema, _ := exchangeSchemas(protocol.AuthenticatorConfig)
 
 	diagnostic, subCommand := renderDiagnostic(
@@ -376,18 +411,23 @@ func TestRenderDiagnosticUsesConfigSubCommandParamsSchema(t *testing.T) {
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if got, want := subCommand, uint64(protocol.ConfigSubCommandSetMinPINLength); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if container, element := diagnostic.Notation, "/subCommandParams/ 2:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "/newMinPINLength/ 1:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "/pinComplexityPolicy/ 4:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "vendor-param-canary"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -396,6 +436,7 @@ func TestRenderDiagnosticUsesConfigSubCommandParamsSchema(t *testing.T) {
 func TestRenderDiagnosticRedactsKnownUnsignedExtensionOutputFields(t *testing.T) {
 	secret := []byte("large-blob-canary")
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(map[uint64]any{
 		8: map[string]any{
 			"largeBlob": map[string]any{
@@ -411,6 +452,7 @@ func TestRenderDiagnosticRedactsKnownUnsignedExtensionOutputFields(t *testing.T)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	_, responseSchema := exchangeSchemas(protocol.AuthenticatorGetAssertion)
 
 	diagnostic, _ := renderDiagnostic(
@@ -423,21 +465,27 @@ func TestRenderDiagnosticRedactsKnownUnsignedExtensionOutputFields(t *testing.T)
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if container, element := diagnostic.Notation, "/unsignedExtensionOutputs/ 8:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, `"written": true`; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, `"blob": h'/[REDACTED]/'`; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, `"originalSize": 42`; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "vendor-canary"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, hex.EncodeToString(secret); strings.Contains(container, element) {
 		t.Errorf("value unexpectedly contains %#v", element)
 	}
@@ -451,6 +499,7 @@ func TestRenderDiagnosticRedactsKnownUnsignedExtensionOutputFields(t *testing.T)
 
 func TestRenderDiagnosticShowsSafeMakeCredentialUnsignedExtensionOutputs(t *testing.T) {
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(map[uint64]any{
 		6: map[string]any{
 			"largeBlob": map[string]any{
@@ -461,6 +510,7 @@ func TestRenderDiagnosticShowsSafeMakeCredentialUnsignedExtensionOutputs(t *test
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	_, responseSchema := exchangeSchemas(protocol.AuthenticatorMakeCredential)
 
 	diagnostic, _ := renderDiagnostic(
@@ -473,15 +523,19 @@ func TestRenderDiagnosticShowsSafeMakeCredentialUnsignedExtensionOutputs(t *test
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if container, element := diagnostic.Notation, "/unsignedExtensionOutputs/ 6:"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, `"supported": true`; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, diagnosticRedacted; strings.Contains(container, element) {
 		t.Errorf("value unexpectedly contains %#v", element)
 	}
+
 	if got := diagnostic.RedactedFields; len(got) != 0 {
 		t.Errorf("got non-empty value %#v", got)
 	}
@@ -489,6 +543,7 @@ func TestRenderDiagnosticShowsSafeMakeCredentialUnsignedExtensionOutputs(t *test
 
 func TestRenderDiagnosticWithoutSchemaShowsRawCBOR(t *testing.T) {
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(map[uint64]any{
 		99: []any{"vendor", map[string]any{"future": true}},
 	})
@@ -506,9 +561,11 @@ func TestRenderDiagnosticWithoutSchemaShowsRawCBOR(t *testing.T) {
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	if container, element := diagnostic.Notation, "vendor"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := diagnostic.Notation, "future"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
@@ -516,6 +573,7 @@ func TestRenderDiagnosticWithoutSchemaShowsRawCBOR(t *testing.T) {
 
 func TestRenderDiagnosticHasDeterministicMapOrder(t *testing.T) {
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(map[uint64]any{
 		10: "example.com",
 		2:  uint64(protocol.ClientPINSubCommandGetPINRetries),
@@ -535,6 +593,7 @@ func TestRenderDiagnosticHasDeterministicMapOrder(t *testing.T) {
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	want := "{\n" +
 		"  /pinUvAuthProtocol/ 1: 1,\n" +
 		"  /subCommand/ 2: 1,\n" +
@@ -547,6 +606,7 @@ func TestRenderDiagnosticHasDeterministicMapOrder(t *testing.T) {
 
 func TestRenderDiagnosticPrettyPrintsNestedCollections(t *testing.T) {
 	configured := options.NewOptions()
+
 	raw, err := configured.EncMode.Marshal(map[uint64]any{
 		99: []any{
 			map[string]any{
@@ -569,6 +629,7 @@ func TestRenderDiagnosticPrettyPrintsNestedCollections(t *testing.T) {
 	if got := diagnostic.Error; len(got) != 0 {
 		t.Fatalf("got non-empty value %#v", got)
 	}
+
 	want := "{\n" +
 		"  99: [\n" +
 		"    {\n" +
@@ -594,6 +655,7 @@ func TestRenderDiagnosticRejectsMalformedCBORWithoutNotation(t *testing.T) {
 	if got := diagnostic.Error; len(got) == 0 {
 		t.Errorf("got empty value %#v, want non-empty", got)
 	}
+
 	if got := diagnostic.Notation; len(got) != 0 {
 		t.Errorf("got non-empty value %#v", got)
 	}
@@ -603,12 +665,15 @@ func TestLowerCamel(t *testing.T) {
 	if got, want := lowerCamel("ClientDataHash"), "clientDataHash"; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := lowerCamel("PINComplexityPolicy"), "pinComplexityPolicy"; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := lowerCamel("AAGUID"), "aaguid"; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := lowerCamel("MaxRPIDsForSetMinPINLength"), "maxRPIDsForSetMinPINLength"; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -624,10 +689,12 @@ func TestExchangeLogsStructuredRedactedDiagnostic(t *testing.T) {
 		RPID:              "engineers.example",
 	}
 	configured := options.NewOptions()
+
 	requestBody, err := configured.EncMode.Marshal(request)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	responseBody, err := configured.EncMode.Marshal(map[uint64]any{
 		2:  responseSecret,
 		99: "response-unknown-canary",
@@ -637,11 +704,13 @@ func TestExchangeLogsStructuredRedactedDiagnostic(t *testing.T) {
 	}
 
 	var events []ctapdiag.Exchange
+
 	transport := &fakeCBORTransport{
 		t:        t,
 		request:  append([]byte{byte(protocol.AuthenticatorClientPIN)}, requestBody...),
 		response: responseBody,
 	}
+
 	client, err := NewClient(
 		options.WithDiagnosticSink(func(_ context.Context, event ctapdiag.Exchange) {
 			events = append(events, event)
@@ -656,6 +725,7 @@ func TestExchangeLogsStructuredRedactedDiagnostic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := len(events), 1; got != want {
 		t.Fatalf("got length %d, want %d", got, want)
 	}
@@ -664,18 +734,23 @@ func TestExchangeLogsStructuredRedactedDiagnostic(t *testing.T) {
 	if got, want := event.Command, protocol.AuthenticatorClientPIN; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := event.SubCommand, uint64(protocol.ClientPINSubCommandGetPinUvAuthTokenUsingPinWithPermissions); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := event.Request.Bytes, len(requestBody); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := event.Response.Bytes, len(responseBody); got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got := event.Status; got == nil {
 		t.Fatalf("got nil, want a non-nil value")
 	}
+
 	if got, want := *event.Status, ctaptransport.CTAP2_OK; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -683,9 +758,11 @@ func TestExchangeLogsStructuredRedactedDiagnostic(t *testing.T) {
 	if container, element := event.Request.Notation, "engineers.example"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := event.Request.Notation, "REDACTED"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := event.Request.Notation, hex.EncodeToString(requestSecret); strings.Contains(container, element) {
 		t.Errorf("value unexpectedly contains %#v", element)
 	}
@@ -699,9 +776,11 @@ func TestExchangeLogsStructuredRedactedDiagnostic(t *testing.T) {
 	if container, element := event.Response.Notation, "REDACTED"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := event.Response.Notation, "response-unknown-canary"; !strings.Contains(container, element) {
 		t.Errorf("value does not contain %#v", element)
 	}
+
 	if container, element := event.Response.Notation, hex.EncodeToString(responseSecret); strings.Contains(container, element) {
 		t.Errorf("value unexpectedly contains %#v", element)
 	}

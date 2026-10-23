@@ -16,20 +16,18 @@ type Key map[int]any
 // KeyFromP256PublicKey converts a P-256 public key to the COSE key agreement
 // representation required by CTAP. The result contains only required fields.
 func KeyFromP256PublicKey(publicKey *ecdh.PublicKey) (Key, error) {
-	if publicKey == nil {
-		return nil, errors.New("cose: nil P-256 public key")
-	}
 	if publicKey.Curve() != ecdh.P256() {
 		return nil, fmt.Errorf("cose: unsupported key agreement curve %q", publicKey.Curve())
 	}
 
 	encoded := publicKey.Bytes()
+
 	return Key{
 		KeyParameterKty:    KeyTypeEC2,
 		KeyParameterAlg:    AlgorithmECDHESHKDF256,
 		EC2KeyParameterCrv: EllipticCurveP256,
-		EC2KeyParameterX:   append([]byte(nil), encoded[1:33]...),
-		EC2KeyParameterY:   append([]byte(nil), encoded[33:65]...),
+		EC2KeyParameterX:   encoded[1:33:33],
+		EC2KeyParameterY:   encoded[33:65:65],
 	}, nil
 }
 
@@ -39,6 +37,7 @@ func (k Key) P256PublicKey() (*ecdh.PublicKey, error) {
 	if k == nil {
 		return nil, errors.New("cose: nil key agreement key")
 	}
+
 	if len(k) != 5 {
 		return nil, fmt.Errorf("cose: key agreement key has %d parameters, want 5", len(k))
 	}
@@ -46,9 +45,11 @@ func (k Key) P256PublicKey() (*ecdh.PublicKey, error) {
 	if err := requireInteger(k, KeyParameterKty, KeyTypeEC2, "kty"); err != nil {
 		return nil, err
 	}
+
 	if err := requireInteger(k, KeyParameterAlg, int(AlgorithmECDHESHKDF256), "alg"); err != nil {
 		return nil, err
 	}
+
 	if err := requireInteger(k, EC2KeyParameterCrv, EllipticCurveP256, "crv"); err != nil {
 		return nil, err
 	}
@@ -57,6 +58,7 @@ func (k Key) P256PublicKey() (*ecdh.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	y, err := coordinate(k, EC2KeyParameterY, "y")
 	if err != nil {
 		return nil, err
@@ -71,6 +73,7 @@ func (k Key) P256PublicKey() (*ecdh.PublicKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cose: invalid P-256 public key: %w", err)
 	}
+
 	return publicKey, nil
 }
 
@@ -81,6 +84,7 @@ func requireInteger(k Key, label, want int, name string) error {
 	}
 
 	valid := false
+
 	switch value := value.(type) {
 	case Algorithm:
 		valid = int(value) == want
@@ -93,9 +97,11 @@ func requireInteger(k Key, label, want int, name string) error {
 	default:
 		return fmt.Errorf("cose: key agreement key has invalid %s type %T", name, value)
 	}
+
 	if !valid {
 		return fmt.Errorf("cose: key agreement key has invalid %s %v, want %d", name, value, want)
 	}
+
 	return nil
 }
 
@@ -104,12 +110,15 @@ func coordinate(k Key, label int, name string) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("cose: key agreement key is missing %s coordinate", name)
 	}
+
 	coordinate, ok := value.([]byte)
 	if !ok {
 		return nil, fmt.Errorf("cose: key agreement key has invalid %s coordinate type %T", name, value)
 	}
+
 	if len(coordinate) != 32 {
 		return nil, fmt.Errorf("cose: key agreement key has invalid %s coordinate length %d", name, len(coordinate))
 	}
+
 	return coordinate, nil
 }

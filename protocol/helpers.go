@@ -35,6 +35,7 @@ func parseAuthData(data []byte) (authData, error) {
 	if len(data) < 37 {
 		return authData{}, fmt.Errorf("auth data is too short: got %d bytes, want at least 37", len(data))
 	}
+
 	if reserved := AuthDataFlag(data[32]) & ((1 << 1) | (1 << 5)); reserved != 0 {
 		return authData{}, fmt.Errorf("auth data uses reserved flag bits 0x%02x", byte(reserved))
 	}
@@ -44,6 +45,7 @@ func parseAuthData(data []byte) (authData, error) {
 		Flags:     AuthDataFlag(data[32]),
 		SignCount: binary.BigEndian.Uint32(data[33:37]),
 	}
+
 	offset := 37
 	if d.Flags.AttestedCredentialDataIncluded() {
 		if len(data) < offset+16 {
@@ -59,11 +61,14 @@ func parseAuthData(data []byte) (authData, error) {
 		if len(data) < offset+2 {
 			return authData{}, fmt.Errorf("auth data is missing credential ID length")
 		}
+
 		length := binary.BigEndian.Uint16(data[offset : offset+2])
+
 		offset += 2
 		if len(data) < offset+int(length) {
 			return authData{}, fmt.Errorf("auth data credential ID is truncated")
 		}
+
 		credData.CredentialID = data[offset : offset+int(length)]
 		offset += int(length)
 
@@ -71,10 +76,12 @@ func parseAuthData(data []byte) (authData, error) {
 		if len(data) == offset {
 			return authData{}, fmt.Errorf("auth data is missing credential public key")
 		}
+
 		dec := cbor.NewDecoder(bytes.NewReader(data[offset:]))
 		if err := dec.Decode(&credData.CredentialPublicKey); err != nil {
 			return authData{}, err
 		}
+
 		offset += dec.NumBytesRead()
 
 		d.AttestedCredentialData = credData
@@ -84,21 +91,26 @@ func parseAuthData(data []byte) (authData, error) {
 		if len(data) == offset {
 			return authData{}, fmt.Errorf("auth data is missing extension data")
 		}
+
 		extensions := data[offset:]
 		decoder := cbor.NewDecoder(bytes.NewReader(extensions))
+
 		var values map[string]any
 		if err := decoder.Decode(&values); err != nil {
 			return authData{}, fmt.Errorf("decode auth data extensions: %w", err)
 		}
+
 		if values == nil {
 			return authData{}, fmt.Errorf("auth data extension data must be a CBOR map")
 		}
+
 		if decoder.NumBytesRead() != len(extensions) {
 			return authData{}, fmt.Errorf(
 				"auth data extensions have %d trailing bytes",
 				len(extensions)-decoder.NumBytesRead(),
 			)
 		}
+
 		d.Extensions = extensions
 		offset = len(data)
 	}

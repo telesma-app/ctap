@@ -63,6 +63,19 @@ go test ./...
 For changes to transport concurrency, also run the race/stress command
 documented in the relevant change plan.
 
+## Lint
+
+Install [golangci-lint v2](https://golangci-lint.run/docs/welcome/install/local/)
+built with a Go version compatible with `go.mod`, then run:
+
+```sh
+make lint
+```
+
+This runs the standard linters and `wsl_v5` with its default settings against
+the root module, including tests. Examples are separate modules; run
+`golangci-lint run ./...` from an example directory to lint it.
+
 ## Opt-in BLE hardware test
 
 The BLE hardware test is excluded from normal runs. On macOS, grant Bluetooth

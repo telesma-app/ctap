@@ -20,6 +20,7 @@ func Select(
 		devices      []*Device
 		candidateErr error
 	)
+
 	for deviceTransport, err := range enumerate(ctx) {
 		if err != nil {
 			candidateErr = errors.Join(candidateErr, err)
@@ -31,6 +32,7 @@ func Select(
 			candidateErr = errors.Join(candidateErr, err, deviceTransport.Close())
 			continue
 		}
+
 		devices = append(devices, device)
 	}
 
@@ -48,6 +50,7 @@ func Select(
 
 	selectionCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
 	results := make(chan result, len(devices))
 	for _, device := range devices {
 		go func() {
@@ -56,6 +59,7 @@ func Select(
 	}
 
 	var selectionErr error
+
 	for range devices {
 		select {
 		case <-ctx.Done():
@@ -69,9 +73,11 @@ func Select(
 			}
 
 			cancel()
+
 			if err := closeDevices(devices, result.device); err != nil {
 				return nil, errors.Join(err, result.device.Close())
 			}
+
 			return result.device, nil
 		}
 	}
@@ -81,6 +87,7 @@ func Select(
 
 func closeDevices(devices []*Device, except *Device) error {
 	var closeErr error
+
 	for _, device := range devices {
 		if device != except {
 			closeErr = errors.Join(closeErr, device.Close())

@@ -67,6 +67,7 @@ func (d *Device) Read(ctx context.Context, report []byte) (int, error) {
 	n, err := interruptOnCancel(ctx, d.conn.SetReadDeadline, func() (int, error) {
 		return io.ReadFull(d.conn, report)
 	})
+
 	return n, err
 }
 
@@ -75,6 +76,7 @@ func (d *Device) Write(ctx context.Context, report []byte) (int, error) {
 	if len(report) != outputReportSize {
 		return 0, fmt.Errorf("tcp: output report must be %d bytes, got %d", outputReportSize, len(report))
 	}
+
 	if report[0] != 0 {
 		return 0, fmt.Errorf("tcp: output report ID must be zero, got %d", report[0])
 	}
@@ -85,6 +87,7 @@ func (d *Device) Write(ctx context.Context, report []byte) (int, error) {
 	n, err := interruptOnCancel(ctx, d.conn.SetWriteDeadline, func() (int, error) {
 		return writeFull(d.conn, report[1:])
 	})
+
 	return n + 1, err
 }
 
@@ -105,18 +108,22 @@ func interruptOnCancel(
 	interrupted := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
 		_ = setDeadline(time.Now())
+
 		close(interrupted)
 	})
 
 	n, err := operation()
+
 	if !stop() {
 		<-interrupted
 	}
+
 	resetErr := setDeadline(time.Time{})
 
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return n, ctxErr
 	}
+
 	return n, errors.Join(err, resetErr)
 }
 
@@ -124,10 +131,12 @@ func writeFull(writer io.Writer, data []byte) (int, error) {
 	written := 0
 	for written < len(data) {
 		n, err := writer.Write(data[written:])
+
 		written += n
 		if err != nil {
 			return written, err
 		}
+
 		if n == 0 {
 			return written, io.ErrShortWrite
 		}

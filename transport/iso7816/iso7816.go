@@ -93,6 +93,7 @@ func Select(ctx context.Context, rawCard baseiso7816.Card) (protocol.Version, er
 	}
 
 	card := ioCard{Card: rawCard}
+
 	response, err := baseiso7816.Exchange(
 		ctx,
 		card,
@@ -102,6 +103,7 @@ func Select(ctx context.Context, rawCard baseiso7816.Card) (protocol.Version, er
 	if err != nil {
 		return "", fmt.Errorf("iso7816: select FIDO applet: %w", invalidateOnError(err))
 	}
+
 	if err := response.APDUError(); err != nil {
 		return "", fmt.Errorf("iso7816: select FIDO applet: %w", err)
 	}
@@ -123,6 +125,7 @@ func CBOR(ctx context.Context, card baseiso7816.Card, data []byte) (ctaptranspor
 	if len(data) > maxMessageSize {
 		return ctaptransport.CBORResponse{}, ErrCommandTooLarge
 	}
+
 	if err := ctx.Err(); err != nil {
 		return ctaptransport.CBORResponse{}, err
 	}
@@ -131,6 +134,7 @@ func CBOR(ctx context.Context, card baseiso7816.Card, data []byte) (ctaptranspor
 	if err != nil {
 		return ctaptransport.CBORResponse{}, err
 	}
+
 	if len(response) < 1 {
 		return ctaptransport.CBORResponse{}, baseiso7816.ErrInvalidResponse
 	}
@@ -143,6 +147,7 @@ func CBOR(ctx context.Context, card baseiso7816.Card, data []byte) (ctaptranspor
 
 func exchangeCTAP(ctx context.Context, rawCard baseiso7816.Card, data []byte) ([]byte, error) {
 	card := ioCard{Card: rawCard}
+
 	commands, err := baseiso7816.Chain(baseiso7816.Command{
 		CLA:      claCTAP,
 		INS:      insNFCCTAPMsg,
@@ -153,6 +158,7 @@ func exchangeCTAP(ctx context.Context, rawCard baseiso7816.Card, data []byte) ([
 	if err != nil {
 		return nil, err
 	}
+
 	commands[len(commands)-1].P1 = p1SupportsGetResponse
 
 	for _, command := range commands[:len(commands)-1] {
@@ -160,9 +166,11 @@ func exchangeCTAP(ctx context.Context, rawCard baseiso7816.Card, data []byte) ([
 		if err != nil {
 			return nil, invalidateOnError(err)
 		}
+
 		if err := response.APDUError(); err != nil {
 			return nil, err
 		}
+
 		if len(response.Data) != 0 {
 			return nil, baseiso7816.ErrInvalidResponse
 		}
@@ -182,6 +190,7 @@ func exchangeCTAP(ctx context.Context, rawCard baseiso7816.Card, data []byte) ([
 		if len(response.Data) != 1 {
 			return nil, baseiso7816.ErrInvalidResponse
 		}
+
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, cancelPolling(ctx, rawCard, ctxErr)
 		}
@@ -196,6 +205,7 @@ func exchangeCTAP(ctx context.Context, rawCard baseiso7816.Card, data []byte) ([
 			if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
 				return nil, cancelPolling(ctx, rawCard, err)
 			}
+
 			return nil, invalidateOnError(err)
 		}
 	}
@@ -209,6 +219,7 @@ func exchangeCTAP(ctx context.Context, rawCard baseiso7816.Card, data []byte) ([
 
 func cancelPolling(ctx context.Context, rawCard baseiso7816.Card, originalErr error) error {
 	cancelCtx := context.WithoutCancel(ctx)
+
 	response, err := baseiso7816.Exchange(
 		cancelCtx,
 		rawCard,
@@ -232,10 +243,12 @@ func Deselect(ctx context.Context, rawCard baseiso7816.Card) error {
 	}
 
 	card := ioCard{Card: rawCard}
+
 	response, err := baseiso7816.Transmit(ctx, card, deselectAppletCommand)
 	if err == nil {
 		err = response.APDUError()
 	}
+
 	if err != nil {
 		return fmt.Errorf("iso7816: deselect FIDO applet: %w", invalidateOnError(err))
 	}

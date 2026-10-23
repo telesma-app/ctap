@@ -24,6 +24,7 @@ func TestEnumerateOpensDeviceDespiteMetadataError(t *testing.T) {
 				if !yield(&ghid.DeviceInfo{Path: "device"}, metadataErr) {
 					return
 				}
+
 				yield(&ghid.DeviceInfo{Path: "next"}, nil)
 			}
 			want := []*ctaphid.Transport{new(ctaphid.Transport), new(ctaphid.Transport)}
@@ -32,12 +33,15 @@ func TestEnumerateOpensDeviceDespiteMetadataError(t *testing.T) {
 			open := func(gotCtx context.Context, path string) (*ctaphid.Transport, error) {
 				index := opens
 				opens++
+
 				if index >= len(want) || gotCtx != ctx || path != []string{"device", "next"}[index] {
 					t.Fatalf("unexpected open arguments: %v, %q", gotCtx, path)
 				}
+
 				if index == 0 && test.err != nil {
 					return nil, test.err
 				}
+
 				return want[index], nil
 			}
 
@@ -45,23 +49,29 @@ func TestEnumerateOpensDeviceDespiteMetadataError(t *testing.T) {
 			for device, err := range enumerate(ctx, devices, open) {
 				index := results
 				results++
+
 				if index >= len(want) {
 					t.Fatal("unexpected enumeration result")
 				}
+
 				var wantErr error
 				if index == 0 {
 					wantErr = test.err
 				}
+
 				if err != wantErr {
 					t.Fatalf("error = %v, want %v", err, wantErr)
 				}
+
 				if wantErr == nil && device != want[index] {
 					t.Fatalf("device = %v, want opened transport", device)
 				}
+
 				if wantErr != nil && device != nil {
 					t.Fatalf("failed open returned a device: %v", device)
 				}
 			}
+
 			if opens != 2 || results != 2 {
 				t.Fatalf("opens = %d, results = %d; want 2 each", opens, results)
 			}
@@ -75,15 +85,18 @@ func TestEnumerateContinuesAfterDiscoveryError(t *testing.T) {
 		if !yield(nil, discoveryErr) {
 			return
 		}
+
 		yield(&ghid.DeviceInfo{Path: "available"}, nil)
 	}
 	want := new(ctaphid.Transport)
 	opens := 0
 	open := func(_ context.Context, path string) (*ctaphid.Transport, error) {
 		opens++
+
 		if path != "available" {
 			t.Fatalf("unexpected path: %q", path)
 		}
+
 		return want, nil
 	}
 
@@ -103,6 +116,7 @@ func TestEnumerateContinuesAfterDiscoveryError(t *testing.T) {
 			t.Fatal("unexpected enumeration result")
 		}
 	}
+
 	if opens != 1 || results != 2 {
 		t.Fatalf("opens = %d, results = %d; want 1 and 2", opens, results)
 	}
@@ -115,9 +129,11 @@ func TestEnumerateStopsWithConsumer(t *testing.T) {
 			if withDevice {
 				info = &ghid.DeviceInfo{Path: "first"}
 			}
+
 			if !yield(info, errors.New("metadata unavailable")) {
 				return
 			}
+
 			t.Fatal("enumeration continued after consumer stopped")
 		}
 		opens := 0
@@ -129,10 +145,12 @@ func TestEnumerateStopsWithConsumer(t *testing.T) {
 		for range enumerate(t.Context(), devices, open) {
 			break
 		}
+
 		wantOpens := 0
 		if withDevice {
 			wantOpens = 1
 		}
+
 		if opens != wantOpens {
 			t.Fatalf("opens = %d, want %d", opens, wantOpens)
 		}

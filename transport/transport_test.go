@@ -16,6 +16,7 @@ func TestValidateCBORResponsePreservesSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got, want := got, want; got.StatusCode != want.StatusCode || ((got.Data == nil) != (want.Data == nil) || !bytes.Equal(got.Data, want.Data)) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -30,9 +31,11 @@ func TestValidateCBORResponseReturnsTypedError(t *testing.T) {
 	if err := err; !errors.As(err, &ctapErr) {
 		t.Fatalf("error %v does not match requested type", err)
 	}
+
 	if got, want := ctapErr.Command, protocol.AuthenticatorGetInfo; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
+
 	if got, want := ctapErr.StatusCode, CTAP2_ERR_INVALID_CBOR; got != want {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
@@ -51,6 +54,7 @@ func TestIOErrorPreservesOperationAndCause(t *testing.T) {
 			t.Errorf("got error %v, want %q", err, want)
 		}
 	}
+
 	if err, target := err, cause; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
@@ -59,6 +63,7 @@ func TestIOErrorPreservesOperationAndCause(t *testing.T) {
 	if err := err; !errors.As(err, &got) {
 		t.Fatalf("error %v does not match requested type", err)
 	}
+
 	if got, want := got, err; got != want {
 		t.Errorf("got pointer %p, want %p", got, want)
 	}
@@ -82,6 +87,7 @@ func TestDeviceInvalidatedErrorPreservesCause(t *testing.T) {
 			t.Errorf("got error %v, want %q", err, want)
 		}
 	}
+
 	if err, target := err, io.ErrUnexpectedEOF; !errors.Is(err, target) {
 		t.Fatalf("got error %v, want errors.Is(error, %#v)", err, target)
 	}
@@ -90,6 +96,7 @@ func TestDeviceInvalidatedErrorPreservesCause(t *testing.T) {
 	if got := ok; !got {
 		t.Fatalf("got false, want true")
 	}
+
 	if got, want := ioErr, cause; got != want {
 		t.Errorf("got pointer %p, want %p", got, want)
 	}
@@ -98,6 +105,7 @@ func TestDeviceInvalidatedErrorPreservesCause(t *testing.T) {
 	if got := ok; !got {
 		t.Fatalf("got false, want true")
 	}
+
 	if got, want := invalidatedErr, err; got != want {
 		t.Errorf("got pointer %p, want %p", got, want)
 	}

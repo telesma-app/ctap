@@ -45,6 +45,7 @@ func Encrypt(sharedSecret []byte, demPlaintext []byte) ([]byte, error) {
 	if len(sharedSecret) != 64 {
 		return nil, fmt.Errorf("invalid shared secret length")
 	}
+
 	if len(demPlaintext)%16 != 0 {
 		return nil, fmt.Errorf("invalid plaintext length")
 	}
@@ -63,6 +64,7 @@ func Encrypt(sharedSecret []byte, demPlaintext []byte) ([]byte, error) {
 	if _, err := rand.Read(iv); err != nil {
 		return nil, fmt.Errorf("cannot generate random iv: %w", err)
 	}
+
 	ciphertext := make([]byte, len(demPlaintext))
 
 	mode := cipher.NewCBCEncrypter(block, iv)
@@ -90,6 +92,7 @@ func Decrypt(sharedSecret []byte, demCiphertext []byte) ([]byte, error) {
 	}
 
 	iv := demCiphertext[:16]
+
 	ciphertext := demCiphertext[16:]
 	if len(ciphertext) == 0 || len(ciphertext)%block.BlockSize() != 0 {
 		return nil, errors.New("invalid ciphertext")
@@ -114,5 +117,6 @@ func Authenticate(sharedSecret []byte, message []byte) []byte {
 
 	hasher := hmac.New(sha256.New, key)
 	hasher.Write(message)
+
 	return hasher.Sum(nil)
 }

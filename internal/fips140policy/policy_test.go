@@ -16,6 +16,7 @@ func TestFilterCredentialParametersPassesEmptyInputThrough(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FilterCredentialParameters: %v", err)
 	}
+
 	if filtered != nil {
 		t.Fatalf("filtered = %v, want nil", filtered)
 	}
@@ -46,10 +47,12 @@ func TestFilterCredentialParameters(t *testing.T) {
 		{Type: credential.PublicKeyCredentialTypePublicKey, Algorithm: cose.Algorithm(12345)},
 	}
 	original := slices.Clone(parameters)
+
 	filtered, err := FilterCredentialParameters(parameters)
 	if err != nil {
 		t.Fatalf("FilterCredentialParameters: %v", err)
 	}
+
 	if !slices.Equal(parameters, original) {
 		t.Fatalf("input parameters changed: got %v, want %v", parameters, original)
 	}
@@ -91,13 +94,16 @@ func TestFilterPreviewSignAlgorithms(t *testing.T) {
 		cose.AlgorithmEd25519,
 	}
 	original := slices.Clone(algorithms)
+
 	filtered, err := FilterPreviewSignAlgorithms(algorithms)
 	if err != nil {
 		t.Fatalf("FilterPreviewSignAlgorithms: %v", err)
 	}
+
 	if !slices.Equal(algorithms, original) {
 		t.Fatalf("input algorithms changed: got %v, want %v", algorithms, original)
 	}
+
 	if got, want := filtered, []cose.Algorithm{cose.AlgorithmES256, cose.AlgorithmEd25519}; !slices.Equal(got, want) {
 		t.Fatalf("filtered algorithms = %v, want %v", got, want)
 	}
