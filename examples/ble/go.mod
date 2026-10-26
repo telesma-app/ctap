@@ -3,7 +3,7 @@ module github.com/telesma-app/ctap/examples/ble
 go 1.27.0
 
 require (
-	github.com/telesma-app/ble v0.1.0
+	github.com/telesma-app/ble v0.1.1
 	github.com/telesma-app/ctap v0.50.2
 )
 
