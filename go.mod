@@ -13,7 +13,7 @@ require (
 	github.com/telesma-app/ble v0.1.0
 	github.com/telesma-app/hid v0.13.0
 	github.com/telesma-app/iso7816 v0.2.0
-	github.com/telesma-app/pcsc v0.9.0
+	github.com/telesma-app/pcsc v0.9.1
 	github.com/telesma-app/windows-proxy v0.6.0
 	golang.org/x/text v0.43.0
 )

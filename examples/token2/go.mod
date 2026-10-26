@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/telesma-app/ctap v0.50.2
-	github.com/telesma-app/pcsc v0.9.0
+	github.com/telesma-app/pcsc v0.9.1
 )
 
 require (
