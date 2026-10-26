@@ -20,8 +20,8 @@ github.com/telesma-app/hid v0.13.0 h1:bbuGvXEF/MJdne3YASJ+uMhjf46hcO7rxluwDOjEdW
 github.com/telesma-app/hid v0.13.0/go.mod h1:fvqpOxlVZAraPHWL3cgSNnY1Ib7UJbvv0KojIvGMQOI=
 github.com/telesma-app/iso7816 v0.2.0 h1:Ny8ErRKmFOJ6IUcOdvw/HKjGOXATa//LUx/GHXlxT/M=
 github.com/telesma-app/iso7816 v0.2.0/go.mod h1:oI7P4NERU4/SeBbou5UYg9vHiBvSC7QWF9PbLxcjxb4=
-github.com/telesma-app/pcsc v0.9.0 h1:vrirJ9xMgJyPF41lG3wg4Te7fmA+46bnenF4aswjV8w=
-github.com/telesma-app/pcsc v0.9.0/go.mod h1:a083kzMqXUCC2DgPzHtF/TZ2p1msMAK9DSx4wS245lY=
+github.com/telesma-app/pcsc v0.9.1 h1:QpneKOWXwG+ZsdSnEpMEl4AqhqTuO94jknwkeuVlMZ0=
+github.com/telesma-app/pcsc v0.9.1/go.mod h1:cdjqtNEzkIv+q/zkAm5OUHUSAhyi9C1xRjn+U1a9JbM=
 github.com/telesma-app/windows-proxy v0.6.0 h1:9qojyYBva02Q06377WB3bJjjzk8cQ9juYLPoIP9Q4q8=
 github.com/telesma-app/windows-proxy v0.6.0/go.mod h1:AWH4wSp2v0QC0qxM0tjYP3XzSjMDyBZyNcrzASt91wM=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
