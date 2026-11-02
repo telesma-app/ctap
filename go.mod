@@ -11,7 +11,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/fxamacker/cbor/v2 v2.9.6
 	github.com/telesma-app/ble v0.1.0
-	github.com/telesma-app/hid v0.13.0
+	github.com/telesma-app/hid v0.14.1
 	github.com/telesma-app/iso7816 v0.2.0
 	github.com/telesma-app/pcsc v0.9.0
 	github.com/telesma-app/windows-proxy v0.7.0
