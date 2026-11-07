@@ -303,7 +303,7 @@ func (cl *Client) GetPINRetries(
 		return 0, nil, err
 	}
 
-	var resp *protocol.AuthenticatorClientPINResponse
+	var resp protocol.AuthenticatorClientPINResponse
 	if err := cl.decMode.Unmarshal(respRaw.Data, &resp); err != nil {
 		return 0, nil, err
 	}
@@ -342,7 +342,7 @@ func (cl *Client) GetUVRetries(
 		return 0, err
 	}
 
-	var resp *protocol.AuthenticatorClientPINResponse
+	var resp protocol.AuthenticatorClientPINResponse
 	if err := cl.decMode.Unmarshal(respRaw.Data, &resp); err != nil {
 		return 0, err
 	}
@@ -377,9 +377,13 @@ func (cl *Client) GetKeyAgreement(
 		return nil, fmt.Errorf("keyAgreement CBOR request failed: %w", err)
 	}
 
-	var resp *protocol.AuthenticatorClientPINResponse
+	var resp protocol.AuthenticatorClientPINResponse
 	if err := cl.decMode.Unmarshal(respRaw.Data, &resp); err != nil {
 		return nil, fmt.Errorf("cannot unmarshal keyAgreement CBOR response: %w", err)
+	}
+
+	if resp.KeyAgreement == nil {
+		return nil, errors.New("spec violation: keyAgreement is nil")
 	}
 
 	return resp.KeyAgreement, nil
@@ -577,7 +581,7 @@ func (cl *Client) GetPinToken(
 		return nil, err
 	}
 
-	var resp *protocol.AuthenticatorClientPINResponse
+	var resp protocol.AuthenticatorClientPINResponse
 	if err := cl.decMode.Unmarshal(respRaw.Data, &resp); err != nil {
 		return nil, err
 	}
@@ -639,7 +643,7 @@ func (cl *Client) GetPinUvAuthTokenUsingPinWithPermissions(
 		return nil, err
 	}
 
-	var resp *protocol.AuthenticatorClientPINResponse
+	var resp protocol.AuthenticatorClientPINResponse
 	if err := cl.decMode.Unmarshal(respRaw.Data, &resp); err != nil {
 		return nil, err
 	}
@@ -713,7 +717,7 @@ func (cl *Client) getPinUvAuthTokenUsingUv(
 		return nil, err
 	}
 
-	var resp *protocol.AuthenticatorClientPINResponse
+	var resp protocol.AuthenticatorClientPINResponse
 	if err := cl.decMode.Unmarshal(respRaw.Data, &resp); err != nil {
 		return nil, err
 	}

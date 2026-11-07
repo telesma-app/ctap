@@ -75,6 +75,69 @@ func TestGetUVRetriesOmitsUnspecifiedPinUvAuthProtocol(t *testing.T) {
 	})
 }
 
+func TestClientPINRejectsMissingResponseFields(t *testing.T) {
+	keyAgreement := testKeyAgreement(t)
+	operations := []struct {
+		name   string
+		invoke func(*Client) error
+	}{
+		{"PIN retries", func(cl *Client) error {
+			_, _, err := cl.GetPINRetries(context.Background(), protocol.PinUvAuthProtocolTwo)
+			return err
+		}},
+		{"UV retries", func(cl *Client) error {
+			_, err := cl.GetUVRetries(context.Background(), protocol.PinUvAuthProtocolTwo)
+			return err
+		}},
+		{"key agreement", func(cl *Client) error {
+			_, err := cl.GetKeyAgreement(context.Background(), protocol.PinUvAuthProtocolTwo)
+			return err
+		}},
+		{"legacy PIN token", func(cl *Client) error {
+			_, err := cl.GetPinToken(context.Background(), protocol.PinUvAuthProtocolTwo, keyAgreement, "1234")
+			return err
+		}},
+		{"permissioned PIN token", func(cl *Client) error {
+			_, err := cl.GetPinUvAuthTokenUsingPinWithPermissions(
+				context.Background(), protocol.PinUvAuthProtocolTwo, keyAgreement, "1234",
+				protocol.PermissionGetAssertion, "example.com",
+			)
+
+			return err
+		}},
+		{"permissioned UV token", func(cl *Client) error {
+			_, err := cl.GetPinUvAuthTokenUsingUvWithPermissions(
+				context.Background(), protocol.PinUvAuthProtocolTwo, keyAgreement,
+				protocol.PermissionGetAssertion, "example.com",
+			)
+
+			return err
+		}},
+	}
+	responses := []struct {
+		name string
+		raw  []byte
+	}{
+		{"null", []byte{0xf6}},
+		{"undefined", []byte{0xf7}},
+		{"tagged null", []byte{0xd9, 0xd9, 0xf7, 0xf6}},
+		{"empty map", []byte{0xa0}},
+	}
+
+	for _, operation := range operations {
+		for _, response := range responses {
+			t.Run(operation.name+"/"+response.name, func(t *testing.T) {
+				fake := testhid.NewCBORDevice(t, testCID, response.raw)
+
+				err := operation.invoke(newTestClient(t, fake))
+				if err == nil {
+					t.Fatal("expected an error for missing response fields")
+				}
+			})
+		}
+	}
+}
+
 func TestClientUsesConfiguredTransport(t *testing.T) {
 	transport := &fakeCBORTransport{
 		t:       t,

@@ -10,6 +10,7 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	ctapdiag "github.com/telesma-app/ctap/diagnostic"
+	"github.com/telesma-app/ctap/internal/testhid"
 	"github.com/telesma-app/ctap/options"
 	"github.com/telesma-app/ctap/protocol"
 	ctaptransport "github.com/telesma-app/ctap/transport"
@@ -658,6 +659,123 @@ func TestRenderDiagnosticRejectsMalformedCBORWithoutNotation(t *testing.T) {
 
 	if got := diagnostic.Notation; len(got) != 0 {
 		t.Errorf("got non-empty value %#v", got)
+	}
+}
+
+func TestRenderDiagnosticDoesNotLeakTaggedKnownContainers(t *testing.T) {
+	configured := options.NewOptions()
+	_, schema := exchangeSchemas(protocol.AuthenticatorGetAssertion)
+	secret := []byte("tagged-secret-canary")
+	root := encodeCBOR(t, map[uint64]any{7: secret})
+	blob := encodeCBOR(t, map[string]any{"blob": secret})
+
+	tags := []struct {
+		name   string
+		prefix []byte
+	}{
+		{"ordinary tag", []byte{0xd9, 0xea, 0x60}},
+		{"self-described CBOR", []byte{0xd9, 0xd9, 0xf7}},
+		{"nested tags", []byte{0xd9, 0xea, 0x60, 0xd9, 0xd9, 0xf7}},
+	}
+	for _, tag := range tags {
+		taggedBlob := cbor.RawMessage(slices.Concat(tag.prefix, blob))
+
+		responses := []struct {
+			name string
+			raw  []byte
+		}{
+			{"root", slices.Concat(tag.prefix, root)},
+			{"unsigned extension", encodeCBOR(t, map[uint64]any{
+				8: map[string]any{"largeBlob": taggedBlob},
+			})},
+			{"wrong-type array", encodeCBOR(t, map[uint64]any{
+				8: []any{cbor.RawMessage(slices.Concat(tag.prefix, encodeCBOR(t, map[string]any{
+					"largeBlob": map[string]any{"blob": secret},
+				})))},
+			})},
+		}
+		for _, response := range responses {
+			t.Run(tag.name+"/"+response.name, func(t *testing.T) {
+				message, _ := renderDiagnostic(configured.DecMode, configured.EncMode, response.raw, schema)
+
+				if message.Error != "" {
+					if message.Notation != "" {
+						t.Errorf("notation = %s, want empty on error", message.Notation)
+					}
+
+					return
+				}
+
+				if strings.Contains(message.Notation, string(secret)) ||
+					strings.Contains(message.Notation, hex.EncodeToString(secret)) {
+					t.Errorf("notation contains secret: %s", message.Notation)
+				}
+
+				if !strings.Contains(message.Notation, diagnosticRedacted) {
+					t.Errorf("notation = %s, want redacted fields", message.Notation)
+				}
+			})
+		}
+	}
+}
+
+func TestRenderDiagnosticPreservesTaggedUnknownAndVendorFields(t *testing.T) {
+	configured := options.NewOptions()
+	_, schema := exchangeSchemas(protocol.AuthenticatorGetAssertion)
+	raw := encodeCBOR(t, map[uint64]any{
+		99: cbor.Tag{Number: 60000, Content: "unknown-canary"},
+		8: map[string]any{
+			"vendor.example": cbor.Tag{Number: 60001, Content: "vendor-canary"},
+		},
+	})
+
+	message, _ := renderDiagnostic(configured.DecMode, configured.EncMode, raw, schema)
+
+	if message.Error != "" {
+		t.Fatal(message.Error)
+	}
+
+	for _, want := range []string{`60000("unknown-canary")`, `60001("vendor-canary")`} {
+		if !strings.Contains(message.Notation, want) {
+			t.Errorf("notation = %s, want %s", message.Notation, want)
+		}
+	}
+}
+
+func TestDiagnosticFormattingErrorPreservesCommandResult(t *testing.T) {
+	response := slices.Concat([]byte{0xd9, 0xd9, 0xf7}, encodeCBOR(t, map[uint64]any{
+		2: []byte("token-canary"),
+		5: uint(7),
+	}))
+	fake := testhid.NewCBORDevice(t, testCID, response)
+
+	var events []ctapdiag.Exchange
+
+	cl, err := NewClient(
+		options.WithTransport(testhid.Transport{Device: fake, CID: testCID}),
+		options.WithDiagnosticSink(func(_ context.Context, event ctapdiag.Exchange) {
+			events = append(events, event)
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	retries, err := cl.GetUVRetries(context.Background(), protocol.PinUvAuthProtocolTwo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if retries != 7 {
+		t.Errorf("retries = %d, want 7", retries)
+	}
+
+	if len(events) != 1 {
+		t.Fatalf("events = %d, want 1", len(events))
+	}
+
+	if events[0].Response.Error == "" || events[0].Response.Notation != "" {
+		t.Errorf("response diagnostic = %+v, want error without notation", events[0].Response)
 	}
 }
 

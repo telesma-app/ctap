@@ -7,6 +7,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -829,6 +831,43 @@ func encryptRawLargeBlob(t *testing.T, key, plaintext []byte, originalSize uint)
 		Ciphertext: slices.Clone(sealed[nonceSize:]),
 		Nonce:      slices.Clone(sealed[:nonceSize]),
 		OrigSize:   originalSize,
+	}
+}
+
+func TestLargeBlobsRejectsInvalidMaxMsgSizeBeforeIO(t *testing.T) {
+	operations := []struct {
+		name   string
+		invoke func(*Device) error
+	}{
+		{"read", func(d *Device) error {
+			_, err := d.GetLargeBlobs(testContext)
+			return err
+		}},
+		{"write", func(d *Device) error {
+			return d.SetLargeBlobs(testContext, nil, nil)
+		}},
+	}
+	for _, operation := range operations {
+		for _, size := range []uint{63, 64, uint(math.MaxInt) + 65} {
+			t.Run(fmt.Sprintf("%s/maxMsgSize=%d", operation.name, size), func(t *testing.T) {
+				fake := testhid.NewCBORDevice(t, testCID)
+				d := newTestDevice(t, fake, protocol.AuthenticatorGetInfoResponse{
+					MaxMsgSize:                  size,
+					MaxSerializedLargeBlobArray: 2048,
+					Options: map[protocol.Option]bool{
+						protocol.OptionLargeBlobs: true,
+					},
+				})
+
+				err := operation.invoke(d)
+
+				if !errors.Is(err, ErrSpecViolation) {
+					t.Fatalf("error = %v, want %v", err, ErrSpecViolation)
+				}
+
+				assertNoAuthenticatorIO(t, fake)
+			})
+		}
 	}
 }
 

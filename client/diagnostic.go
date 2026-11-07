@@ -104,14 +104,26 @@ func (f *diagnosticFormatter) render(
 		return "", 0, fmt.Errorf("empty CBOR item")
 	}
 
+	for schema != nil && schema.Kind() == reflect.Pointer {
+		schema = schema.Elem()
+	}
+
 	switch raw[0] >> 5 {
 	case 4:
+		if schema != nil && schema.Kind() != reflect.Interface &&
+			schema.Kind() != reflect.Array && schema.Kind() != reflect.Slice {
+			return "", 0, fmt.Errorf("CBOR array for diagnostic type %v", schema)
+		}
+
 		var values []cbor.RawMessage
 		if err := f.decoder.Unmarshal(raw, &values); err != nil {
 			return "", 0, err
 		}
 
-		childSchema := collectionElementType(schema)
+		var childSchema reflect.Type
+		if schema != nil && (schema.Kind() == reflect.Array || schema.Kind() == reflect.Slice) {
+			childSchema = schema.Elem()
+		}
 
 		if len(values) == 0 {
 			return "[]", 0, nil
@@ -143,6 +155,12 @@ func (f *diagnosticFormatter) render(
 		return builder.String(), 0, nil
 	case 5:
 		return f.renderMap(raw, schema, path, depth)
+	case 6:
+		if schema != nil && schema.Kind() != reflect.Interface {
+			return "", 0, fmt.Errorf("CBOR tag for diagnostic type %v", schema)
+		}
+
+		fallthrough
 	default:
 		notation, err := f.diagnose.Diagnose(raw)
 		return notation, 0, err
@@ -166,7 +184,7 @@ func (f *diagnosticFormatter) renderMap(
 	}
 
 	var mapValueType reflect.Type
-	if schema = indirectType(schema); schema != nil && schema.Kind() == reflect.Map {
+	if schema != nil && schema.Kind() == reflect.Map {
 		mapValueType = schema.Elem()
 	}
 
@@ -237,6 +255,7 @@ func (f *diagnosticFormatter) renderMap(
 		builder.WriteString(": ")
 
 		childSchema := mapValueType
+		childPath := path
 
 		var valueNotation string
 
@@ -248,6 +267,7 @@ func (f *diagnosticFormatter) renderMap(
 
 		if entry.field != nil {
 			childSchema = entry.field.typeInfo
+			childPath = entry.field.path
 			if entry.field.goName == "SubCommandParams" {
 				if variant := f.subCommandParams[subCommand]; variant != nil {
 					childSchema = variant
@@ -268,7 +288,7 @@ func (f *diagnosticFormatter) renderMap(
 			valueNotation, _, err = f.render(
 				entry.valueCBOR,
 				childSchema,
-				fieldPath(path, entry.field),
+				childPath,
 				depth+1,
 			)
 			if err != nil {
@@ -360,7 +380,7 @@ func writeDiagnosticIndent(builder *strings.Builder, depth int) {
 
 func (f *diagnosticFormatter) fields(schema reflect.Type, path string) (map[string]*diagnosticField, error) {
 	result := make(map[string]*diagnosticField)
-	if err := f.collectFields(indirectType(schema), path, result); err != nil {
+	if err := f.collectFields(schema, path, result); err != nil {
 		return nil, err
 	}
 
@@ -372,6 +392,10 @@ func (f *diagnosticFormatter) collectFields(
 	path string,
 	result map[string]*diagnosticField,
 ) error {
+	for schema != nil && schema.Kind() == reflect.Pointer {
+		schema = schema.Elem()
+	}
+
 	if schema == nil || schema.Kind() != reflect.Struct {
 		return nil
 	}
@@ -391,7 +415,7 @@ func (f *diagnosticFormatter) collectFields(
 		}
 
 		if fieldInfo.Anonymous && wireName == "" {
-			if err := f.collectFields(indirectType(fieldInfo.Type), path, result); err != nil {
+			if err := f.collectFields(fieldInfo.Type, path, result); err != nil {
 				return err
 			}
 
@@ -424,10 +448,15 @@ func (f *diagnosticFormatter) collectFields(
 			return fmt.Errorf("%s.%s: %w", schema, fieldInfo.Name, err)
 		}
 
+		fieldPath := fieldInfo.Name
+		if path != "" {
+			fieldPath = path + "." + fieldPath
+		}
+
 		result[string(encodedKey)] = &diagnosticField{
 			name:       name,
 			goName:     fieldInfo.Name,
-			path:       joinDiagnosticPath(path, fieldInfo.Name),
+			path:       fieldPath,
 			typeInfo:   fieldInfo.Type,
 			integerKey: integerKey,
 			redact:     redact,
@@ -485,37 +514,4 @@ func lowerCamel(name string) string {
 	}
 
 	return string(runes)
-}
-
-func indirectType(value reflect.Type) reflect.Type {
-	for value != nil && value.Kind() == reflect.Pointer {
-		value = value.Elem()
-	}
-
-	return value
-}
-
-func collectionElementType(value reflect.Type) reflect.Type {
-	value = indirectType(value)
-	if value == nil || (value.Kind() != reflect.Array && value.Kind() != reflect.Slice) {
-		return nil
-	}
-
-	return value.Elem()
-}
-
-func fieldPath(parent string, field *diagnosticField) string {
-	if field == nil {
-		return parent
-	}
-
-	return field.path
-}
-
-func joinDiagnosticPath(parent, child string) string {
-	if parent == "" {
-		return child
-	}
-
-	return parent + "." + child
 }

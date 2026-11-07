@@ -161,25 +161,10 @@ func exchangeCTAP(ctx context.Context, rawCard baseiso7816.Card, data []byte) ([
 
 	commands[len(commands)-1].P1 = p1SupportsGetResponse
 
-	for _, command := range commands[:len(commands)-1] {
-		response, err := baseiso7816.Transmit(ctx, card, command)
-		if err != nil {
-			return nil, invalidateOnError(err)
-		}
-
-		if err := response.APDUError(); err != nil {
-			return nil, err
-		}
-
-		if len(response.Data) != 0 {
-			return nil, baseiso7816.ErrInvalidResponse
-		}
-	}
-
-	response, err := baseiso7816.Exchange(
+	response, err := baseiso7816.ExchangeChain(
 		ctx,
 		card,
-		commands[len(commands)-1],
+		commands,
 		baseiso7816.WithMoreDataStatusBytes(0x61, 0x9f),
 	)
 	if err != nil {

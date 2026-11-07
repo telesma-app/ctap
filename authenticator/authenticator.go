@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"iter"
+	"math"
 	"slices"
 	"sync"
 
@@ -149,8 +150,16 @@ func (d *Device) invalidateInfoLocked() {
 	d.infoValid = false
 }
 
-func (d *Device) maxFragmentLength() uint {
-	return d.info.EffectiveMaxMsgSize() - 64
+func (d *Device) maxFragmentLength() (uint, error) {
+	maxMsgSize := d.info.EffectiveMaxMsgSize()
+	if maxMsgSize <= 64 || maxMsgSize-64 > uint(math.MaxInt) {
+		return 0, &ErrorWithMessage{
+			Err:     ErrSpecViolation,
+			Message: fmt.Sprintf("invalid maxMsgSize for large blobs: %d", maxMsgSize),
+		}
+	}
+
+	return maxMsgSize - 64, nil
 }
 
 // New creates a Device over an initialized transport. The caller retains
@@ -1880,7 +1889,10 @@ func (d *Device) getLargeBlobsLocked(ctx context.Context) ([]protocol.LargeBlob,
 		return nil, &ErrorWithMessage{Err: ErrNotSupported, Message: "device doesn't support largeBlobs"}
 	}
 
-	maxFragmentLength := d.maxFragmentLength()
+	maxFragmentLength, err := d.maxFragmentLength()
+	if err != nil {
+		return nil, err
+	}
 
 	resp, err := d.ctapClient.LargeBlobs(
 		ctx,
@@ -1997,7 +2009,11 @@ func (d *Device) setLargeBlobsLocked(ctx context.Context, pinUvAuthToken []byte,
 		)}
 	}
 
-	maxFragmentLength := d.maxFragmentLength()
+	maxFragmentLength, err := d.maxFragmentLength()
+	if err != nil {
+		return err
+	}
+
 	offset := uint(0)
 	length := uint(len(set))
 
