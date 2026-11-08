@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GOWORK: "off"
+
 jobs:
   build:
     strategy:
@@ -64,8 +67,6 @@ jobs:
       run: go test -v ./...
 
   lint:
-    env:
-      GOWORK: "off"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
