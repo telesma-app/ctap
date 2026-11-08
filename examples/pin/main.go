@@ -13,6 +13,7 @@ import (
 
 func main() {
 	ctx := context.Background()
+
 	device, err := authenticator.Select(
 		ctx,
 		directhid.Enumerate,
@@ -20,6 +21,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	defer func() {
 		_ = device.Close()
 	}()
@@ -33,10 +35,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	fmt.Printf("PIN retries: %d", retries)
+
 	if powerCycleRequired != nil {
 		fmt.Printf("; power cycle required: %t", *powerCycleRequired)
 	}
+
 	fmt.Println()
 
 	token, err := device.GetPinUvAuthTokenUsingPIN(
@@ -57,13 +62,16 @@ func printCredentials(ctx context.Context, device *authenticator.Device, token [
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	existing, remaining := uint(0), uint(0)
 	if metadata.ExistingResidentCredentialsCount != nil {
 		existing = *metadata.ExistingResidentCredentialsCount
 	}
+
 	if metadata.MaxPossibleRemainingResidentCredentialsCount != nil {
 		remaining = *metadata.MaxPossibleRemainingResidentCredentialsCount
 	}
+
 	fmt.Printf(
 		"Passkeys: %d (%d slots left)\n",
 		existing,
@@ -71,19 +79,23 @@ func printCredentials(ctx context.Context, device *authenticator.Device, token [
 	)
 
 	rps := make([]protocol.AuthenticatorCredentialManagementResponse, 0)
+
 	for rp, err := range device.EnumerateRPs(ctx, token) {
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		rps = append(rps, rp)
 	}
 
 	index := 1
+
 	for _, rp := range rps {
 		for credential, err := range device.EnumerateCredentials(ctx, token, rp.RPIDHash) {
 			if err != nil {
 				log.Fatal(err)
 			}
+
 			fmt.Printf(
 				"%d) %s: %s / %s / %s\n",
 				index,

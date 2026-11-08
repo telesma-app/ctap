@@ -39,6 +39,7 @@ func run(ctx context.Context) error {
 		fmt.Printf("\n=== %s ===\n", source.name)
 
 		count := 0
+
 		for deviceTransport, err := range source.enumerate(ctx) {
 			if err != nil {
 				fmt.Printf("error: %v\n", err)
@@ -47,6 +48,7 @@ func run(ctx context.Context) error {
 
 			count++
 			fmt.Printf("\n--- authenticator %d ---\n", count)
+
 			device, err := authenticator.New(
 				ctx,
 				deviceTransport,
@@ -56,8 +58,10 @@ func run(ctx context.Context) error {
 				if closeErr := deviceTransport.Close(); closeErr != nil {
 					fmt.Printf("close failed: %v\n", closeErr)
 				}
+
 				continue
 			}
+
 			if err := device.Close(); err != nil {
 				fmt.Printf("close failed: %v\n", err)
 			}
@@ -75,6 +79,7 @@ func printGetInfo(_ context.Context, exchange diagnostic.Exchange) {
 	if exchange.Command != protocol.AuthenticatorGetInfo {
 		return
 	}
+
 	if exchange.Err != nil {
 		fmt.Printf("getInfo failed: %v\n", exchange.Err)
 		return
@@ -83,9 +88,11 @@ func printGetInfo(_ context.Context, exchange diagnostic.Exchange) {
 	if exchange.Status != nil {
 		fmt.Printf("status: %s\n", exchange.Status.String())
 	}
+
 	if exchange.Response.Notation == "" {
 		fmt.Println("{}")
 		return
 	}
+
 	fmt.Println(exchange.Response.Notation)
 }

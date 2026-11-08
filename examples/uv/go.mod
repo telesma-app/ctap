@@ -1,8 +1,8 @@
 module github.com/telesma-app/ctap/examples/uv
 
-go 1.27.0
+go 1.27.3
 
-require github.com/telesma-app/ctap v0.50.2
+require github.com/telesma-app/ctap v0.53.0
 
 require (
 	github.com/cloudflare/circl v1.6.5 // indirect

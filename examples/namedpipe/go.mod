@@ -1,8 +1,8 @@
 module github.com/telesma-app/ctap/examples/namedpipe
 
-go 1.27.0
+go 1.27.3
 
-require github.com/telesma-app/ctap v0.50.2
+require github.com/telesma-app/ctap v0.53.0
 
 require (
 	github.com/Microsoft/go-winio v0.6.4 // indirect

@@ -124,13 +124,14 @@ func TestEnumerateContinuesAfterDiscoveryError(t *testing.T) {
 
 func TestEnumerateStopsWithConsumer(t *testing.T) {
 	for _, withDevice := range []bool{false, true} {
+		metadataErr := errors.New("metadata unavailable")
 		devices := func(yield func(*ghid.DeviceInfo, error) bool) {
 			var info *ghid.DeviceInfo
 			if withDevice {
 				info = &ghid.DeviceInfo{Path: "first"}
 			}
 
-			if !yield(info, errors.New("metadata unavailable")) {
+			if !yield(info, metadataErr) {
 				return
 			}
 
@@ -142,7 +143,15 @@ func TestEnumerateStopsWithConsumer(t *testing.T) {
 			return new(ctaphid.Transport), nil
 		}
 
-		for range enumerate(t.Context(), devices, open) {
+		for _, err := range enumerate(t.Context(), devices, open) {
+			if withDevice {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if !errors.Is(err, metadataErr) {
+				t.Fatalf("error = %v, want %v", err, metadataErr)
+			}
+
 			break
 		}
 

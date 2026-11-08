@@ -1,10 +1,10 @@
 module github.com/telesma-app/ctap/examples/ble
 
-go 1.27.0
+go 1.27.3
 
 require (
 	github.com/telesma-app/ble v0.2.0
-	github.com/telesma-app/ctap v0.50.2
+	github.com/telesma-app/ctap v0.53.0
 )
 
 require (

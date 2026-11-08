@@ -267,6 +267,7 @@ func (f *diagnosticFormatter) renderMap(
 
 		if entry.field != nil {
 			childSchema = entry.field.typeInfo
+
 			childPath = entry.field.path
 			if entry.field.goName == "SubCommandParams" {
 				if variant := f.subCommandParams[subCommand]; variant != nil {

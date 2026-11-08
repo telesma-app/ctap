@@ -1,10 +1,10 @@
 module github.com/telesma-app/ctap/examples/previewsign
 
-go 1.27.0
+go 1.27.3
 
 require (
 	github.com/fxamacker/cbor/v2 v2.10.0
-	github.com/telesma-app/ctap v0.50.2
+	github.com/telesma-app/ctap v0.53.0
 )
 
 require (

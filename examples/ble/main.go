@@ -21,23 +21,27 @@ var (
 
 func main() {
 	flag.Parse()
+
 	if err := run(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(ctx context.Context) error {
+func run(ctx context.Context) (err error) {
 	scanCtx, cancelScan := context.WithTimeout(ctx, *scanDuration)
 	defer cancelScan()
 
 	var advertisements []*gble.DeviceInfo
+
 	for advertisement, err := range ctapblebackend.Devices(scanCtx) {
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) && errors.Is(scanCtx.Err(), context.DeadlineExceeded) {
 				break
 			}
+
 			return err
 		}
+
 		advertisements = append(advertisements, advertisement)
 		fmt.Printf("%s\t%s\tRSSI %d dBm\n", advertisement.ID, advertisement.Name, advertisement.RSSI)
 	}
@@ -58,17 +62,23 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	authenticator, err := ctapauthenticator.New(ctx, transport)
 	if err != nil {
 		return errors.Join(err, transport.Close())
 	}
-	defer authenticator.Close()
+	defer func() {
+		err = errors.Join(err, authenticator.Close())
+	}()
 
 	info, _ := authenticator.GetInfoCached()
+
 	encoded, err := json.MarshalIndent(info, "", "  ")
 	if err != nil {
 		return err
 	}
+
 	fmt.Println(string(encoded))
+
 	return nil
 }

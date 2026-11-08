@@ -496,7 +496,10 @@ func TestCloseUnblocksExchangeAndIsConcurrentSafe(t *testing.T) {
 	}
 
 	select {
-	case <-result:
+	case err := <-result:
+		if _, ok := errors.AsType[*ctaptransport.DeviceInvalidatedError](err); !ok {
+			t.Fatalf("CBOR error = %v, want DeviceInvalidatedError", err)
+		}
 	case <-time.After(time.Second):
 		t.Fatal("Close did not unblock CBOR")
 	}

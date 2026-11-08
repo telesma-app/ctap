@@ -32,14 +32,16 @@ func main() {
 	}
 }
 
-func run(ctx context.Context) error {
+func run(ctx context.Context) (err error) {
 	pin := os.Getenv("FIDO2_PIN")
 
 	device, err := authenticator.Select(ctx, directhid.Enumerate)
 	if err != nil {
 		return err
 	}
-	defer device.Close()
+	defer func() {
+		err = errors.Join(err, device.Close())
+	}()
 
 	info, _ := device.GetInfoCached()
 	if !slices.Contains(info.Extensions, extension.ExtensionIdentifierPreviewSign) {
@@ -60,6 +62,7 @@ func run(ctx context.Context) error {
 	}
 
 	fmt.Println("Touch the authenticator to create a credential and signing key.")
+
 	registration, err := device.MakeCredential(
 		ctx,
 		makeCredentialToken,
@@ -89,11 +92,14 @@ func run(ctx context.Context) error {
 		nil,
 	)
 	clear(makeCredentialToken)
+
 	if err != nil {
 		return err
 	}
+
 	credentialID := registration.AuthData.AttestedCredentialData.CredentialID
 	generatedKey := registration.ExtensionOutputs.PreviewSign.GeneratedKey
+
 	fmt.Printf("Credential ID: %s\n", base64.RawURLEncoding.EncodeToString(credentialID))
 	fmt.Printf("Signing key handle: %s\n", base64.RawURLEncoding.EncodeToString(generatedKey.KeyHandle))
 	fmt.Printf("Signing algorithm: %d\n", generatedKey.Algorithm)
@@ -104,20 +110,25 @@ func run(ctx context.Context) error {
 	if err := cbor.Unmarshal(generatedKey.PublicKey, &publicSeed); err != nil {
 		return fmt.Errorf("decode signing public seed: %w", err)
 	}
+
 	inputKeyMaterial := make([]byte, 32)
 	if _, err := rand.Read(inputKeyMaterial); err != nil {
 		return fmt.Errorf("generate ARKG input key material: %w", err)
 	}
 	defer clear(inputKeyMaterial)
+
 	arkgContext := []byte(rpID)
+
 	verificationKey, arkgKeyHandle, err := arkg.DeriveP256(publicSeed, inputKeyMaterial, arkgContext)
 	if err != nil {
 		return fmt.Errorf("derive ARKG-P256 signing key: %w", err)
 	}
+
 	encMode, err := cbor.CTAP2EncOptions().EncMode()
 	if err != nil {
 		return fmt.Errorf("create CTAP2 CBOR encoder: %w", err)
 	}
+
 	additionalArguments, err := encMode.Marshal(map[int]any{
 		3:  generatedKey.Algorithm,
 		-1: arkgKeyHandle,
@@ -126,10 +137,12 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("encode COSE signing arguments: %w", err)
 	}
+
 	encodedVerificationKey, err := encMode.Marshal(verificationKey)
 	if err != nil {
 		return fmt.Errorf("encode derived signing public key: %w", err)
 	}
+
 	fmt.Printf("Derived signing public key (COSE): %x\n", encodedVerificationKey)
 
 	credentialDescriptor := credential.PublicKeyCredentialDescriptor{
@@ -138,6 +151,7 @@ func run(ctx context.Context) error {
 	}
 	encodedCredentialID := base64.RawURLEncoding.EncodeToString(credentialID)
 	messageDigest := sha256.Sum256(message)
+
 	var getAssertionToken []byte
 	if pin != "" {
 		getAssertionToken, err = device.GetPinUvAuthTokenUsingPIN(
@@ -151,9 +165,11 @@ func run(ctx context.Context) error {
 		}
 	}
 	defer clear(getAssertionToken)
+
 	fmt.Println("Touch the authenticator to sign the message.")
 
 	var assertionSignature []byte
+
 	for assertion, err := range device.GetAssertion(
 		ctx,
 		getAssertionToken,
@@ -178,8 +194,10 @@ func run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
 		assertionSignature = assertion.ExtensionOutputs.PreviewSign.Signature
 	}
+
 	if len(assertionSignature) == 0 {
 		return errors.New("authenticator returned an empty previewSign signature")
 	}
@@ -188,10 +206,12 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	publicKey, err := verificationKey.PublicKey()
 	if err != nil {
 		return err
 	}
+
 	if err := cose.VerifySignature(publicKey, verificationAlgorithm, message, assertionSignature); err != nil {
 		return fmt.Errorf("verify previewSign signature: %w", err)
 	}
@@ -200,5 +220,6 @@ func run(ctx context.Context) error {
 	fmt.Printf("Signature: %x\n", assertionSignature)
 	fmt.Printf("Verification algorithm: %d\n", verificationAlgorithm)
 	fmt.Println("Signature verified.")
+
 	return nil
 }

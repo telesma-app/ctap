@@ -4,6 +4,7 @@ package hidproxy
 
 import (
 	"context"
+	"errors"
 	"io"
 	"iter"
 
@@ -22,21 +23,24 @@ func Devices(ctx context.Context) iter.Seq2[*ghid.DeviceInfo, error] {
 			yield(nil, err)
 			return
 		}
-		defer pipe.Close()
 
 		message, err := proxyprotocol.NewMessage(proxyprotocol.CommandEnumerate, nil)
 		if err != nil {
-			yield(nil, err)
+			yield(nil, errors.Join(err, pipe.Close()))
 			return
 		}
+
 		err = withContextIO(ctx, pipe, func() error {
 			if _, writeErr := message.WriteTo(pipe); writeErr != nil {
 				return writeErr
 			}
 
 			message, err = proxyprotocol.ParseMessage(pipe)
+
 			return err
 		})
+
+		err = errors.Join(err, pipe.Close())
 		if err != nil {
 			yield(nil, err)
 			return
@@ -53,6 +57,7 @@ func Devices(ctx context.Context) iter.Seq2[*ghid.DeviceInfo, error] {
 				yield(nil, err)
 				return
 			}
+
 			if !yield(device.DeviceInfo, device.MetadataErr) {
 				return
 			}
@@ -88,7 +93,18 @@ func Events(ctx context.Context) (<-chan DeviceEvent, error) {
 	events := make(chan DeviceEvent)
 	go func() {
 		defer close(events)
-		defer pipe.Close()
+
+		var eventErr error
+
+		defer func() {
+			err := errors.Join(eventErr, pipe.Close())
+			if err != nil && ctx.Err() == nil {
+				select {
+				case events <- DeviceEvent{Err: err}:
+				case <-ctx.Done():
+				}
+			}
+		}()
 
 		stop := context.AfterFunc(ctx, func() { _ = pipe.Close() })
 		defer stop()
@@ -96,12 +112,7 @@ func Events(ctx context.Context) (<-chan DeviceEvent, error) {
 		for {
 			event, err := proxyprotocol.ParseMessage(pipe)
 			if err != nil {
-				if ctx.Err() == nil {
-					select {
-					case events <- DeviceEvent{Err: err}:
-					case <-ctx.Done():
-					}
-				}
+				eventErr = err
 				return
 			}
 
@@ -152,6 +163,7 @@ func (d *contextDevice) Read(ctx context.Context, p []byte) (n int, err error) {
 		n, err = d.ReadWriteCloser.Read(p)
 		return err
 	})
+
 	return n, err
 }
 
@@ -160,5 +172,6 @@ func (d *contextDevice) Write(ctx context.Context, p []byte) (n int, err error) 
 		n, err = d.ReadWriteCloser.Write(p)
 		return err
 	})
+
 	return n, err
 }
