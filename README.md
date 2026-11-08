@@ -7,11 +7,11 @@
 stateful API for common authenticator workflows.
 
 > [!WARNING]
-> The project is not yet v1.0. Minor releases may include breaking API changes.
+> This module is under active development. Its public API may change during `v0.x`.
 
 This is not a WebAuthn server library. The `webauthn` package contains only the WebAuthn types needed by this project.
 
-## Support
+## Features
 
 The library supports CTAP 2.0 through CTAP 2.3. CTAP 2.3 follows the
 [February 2026 Proposed Standard](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html).
@@ -147,32 +147,11 @@ operations may work without a token on an authenticator that has no PIN or UV pr
 
 ## FIPS 140-3 mode
 
-The `fips140` package follows Go's process-wide `crypto/fips140.Enabled()` state. When enabled, the library:
-
-- filters `MakeCredential` and `previewSign` key-generation algorithms, rejecting a request only when none remain;
-- accepts ES256/384/512, ESP256/384/512, Ed25519, RS256/384/512, and PS256/384/512 for key generation;
-- requires PIN/UV auth protocol 2; `Device` rejects authenticators that offer only protocol 1;
-- rejects local Ed448, secp256k1, RS1, and ARKG-P256 operations; and
-- performs large-blob encryption in the Go Cryptographic Module.
-
-Signature verification also accepts generic EdDSA with an Ed25519 key. RSA public keys used locally must meet the
-FIPS 186-5 modulus and public-exponent requirements.
-
-The policy controls key-generation algorithms requested by this library and cryptography performed locally. For a
-`MakeCredential` response it checks only the declared COSE algorithm, not how the external authenticator generated the
-key. Concrete key parameters are checked when the library converts or verifies that key locally.
-
-Build and test with the certified module selection:
-
-```sh
-GOFIPS140=certified go build ./...
-GOFIPS140=certified go test ./...
-GOFIPS140=certified GODEBUG=fips140=only go test ./...
-```
-
-Strict mode is a test aid, not the production switch. This policy does not certify the application, environment,
-transport, or authenticator. The low-level `crypto/protocolone` package and `crypto.Authenticate` remain policy-free for
-wire compatibility and test vectors; callers must keep their direct use outside FIPS operations.
+The `fips140` package follows Go's process-wide `crypto/fips140.Enabled()` state
+and applies the library's algorithm and PIN/UV policy. See the
+[FIPS guide](docs/fips140.md) for accepted algorithms, certified-module build
+commands and policy limits. This policy does not certify the application or
+authenticator.
 
 ## Usage notes
 
@@ -189,28 +168,13 @@ wire compatibility and test vectors; callers must keep their direct use outside 
 - `iso7816.Select`, `CBOR`, and `Deselect` borrow a card. The caller serializes access and closes it on
   `transport.DeviceInvalidatedError`.
 
-### Diagnostic logging
+## Diagnostic logging
 
-Pass a `diagnostic.Sink` with `options.WithDiagnosticSink` to receive one typed
-event per CTAP command. The event includes command and subcommand metadata plus
-redacted request and response CBOR diagnostic notation; raw wire bytes are
-never passed to the sink. The sink runs synchronously after the transport
-exchange, has no error return, and should return promptly.
-
-Diagnostic notation is a normalized, pretty-printed view for troubleshooting,
-not a byte-exact dump. Unknown commands and CBOR fields are preserved. Known
-integer keys are annotated with CTAP field names using extended diagnostic
-notation comments, for example `/clientDataHash/ 1: h'...'`. Fields tagged with
-the `redact` option in `ctapdiag` are replaced with an empty value of the same
-CBOR type, annotated with `[REDACTED]`, before the log record is created; for
-example, a byte string becomes `h'/[REDACTED]/'`. The first tag component
-overrides the displayed name; `-` keeps the name derived from the Go field, as
-in `ctapdiag:"-,redact"`.
-
-Diagnostic events are redacted, not anonymized. They may contain relying party,
-user, credential, and biometric template identifiers and should be treated as
-sensitive data. Unknown and vendor-defined fields have no redaction metadata,
-so their normalized values are included unredacted.
+Pass a `diagnostic.Sink` with `options.WithDiagnosticSink` to receive typed,
+redacted CTAP exchange events. The [diagnostic logging guide](docs/diagnostics.md)
+describes CBOR notation, redaction and callback behavior. Records may retain
+identifiers and unredacted unknown or vendor-defined fields; treat them as
+sensitive data.
 
 ## Examples
 
@@ -236,26 +200,23 @@ FIDO2_PIN=123456 go run .
 
 In PowerShell, set the variable first: `$env:FIDO2_PIN = "123456"`.
 
-### BLE prototype
+The [BLE example guide](examples/ble/README.md) covers scanning, device
+selection and macOS Bluetooth authorization.
 
-The BLE demo scans for FIDO advertisements during an explicit window, prints
-each opaque CoreBluetooth identifier, name, and RSSI, then performs
-`authenticatorGetInfo`:
+## Development
 
 ```sh
-cd examples/ble
-go run . -scan 8s
-go run . -scan 8s -id 01234567-89AB-CDEF-0123-456789ABCDEF
+GOWORK=off go test ./...
+GOWORK=off go vet ./...
+make lint
 ```
 
-Use `-id` when multiple candidates are found. A conforming authenticator
-protects its FIDO GATT characteristics. The transport relies on macOS to pair
-when necessary and establish the encrypted link when those characteristics are
-accessed, and waits for the protected GATT operations used during
-initialization. Pairing and bond management APIs remain outside this
-prototype. macOS may display its pairing prompt on the first run. The terminal
-application needs Bluetooth permission; packaged host applications also need
-`NSBluetoothAlwaysUsageDescription`.
+The default test suite does not require hardware. See [TESTING.md](TESTING.md)
+for test conventions, separate example modules and opt-in hardware checks.
+
+## License
+
+[Apache License 2.0](LICENSE).
 
 ## References
 
