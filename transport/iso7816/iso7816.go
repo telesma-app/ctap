@@ -26,9 +26,9 @@ const (
 	p1SupportsGetResponse = 0x80
 	p1EndCTAPMsg          = 0x01
 	// CTAP 2.3 NFC cancellation.
-	p1Cancel                 = 0x11
-	shortCommandFragmentSize = 240
-	maxMessageSize           = 0xffff
+	p1Cancel                       = 0x11
+	shortCommandFragmentDataLength = 240
+	maxMessageSize                 = 0xffff
 
 	statusKeepalive baseiso7816.StatusWord = 0x9100
 )
@@ -154,7 +154,7 @@ func exchangeCTAP(ctx context.Context, rawCard baseiso7816.Card, data []byte) ([
 		Data:     data,
 		Le:       256,
 		Encoding: baseiso7816.EncodingShort,
-	}, shortCommandFragmentSize)
+	}, shortCommandFragmentDataLength+6) // Header, Lc and final Le.
 	if err != nil {
 		return nil, err
 	}

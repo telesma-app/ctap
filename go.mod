@@ -12,7 +12,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/telesma-app/ble v0.2.0
 	github.com/telesma-app/hid v0.14.1
-	github.com/telesma-app/iso7816 v0.4.0
+	github.com/telesma-app/iso7816 v0.7.0
 	github.com/telesma-app/pcsc v0.10.0
 	github.com/telesma-app/windows-proxy v0.7.0
 	golang.org/x/text v0.43.0

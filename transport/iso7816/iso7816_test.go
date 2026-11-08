@@ -193,14 +193,14 @@ func TestCBORUsesShortCommandChaining(t *testing.T) {
 		exchange{
 			request: slices.Concat(
 				[]byte{0x90, 0x10, 0x00, 0x00, 0xf0},
-				command[:shortCommandFragmentSize],
+				command[:shortCommandFragmentDataLength],
 			),
 			response: []byte{0x90, 0x00},
 		},
 		exchange{
 			request: slices.Concat(
 				[]byte{0x80, 0x10, 0x80, 0x00, 0x0a},
-				command[shortCommandFragmentSize:],
+				command[shortCommandFragmentDataLength:],
 				[]byte{0x00},
 			),
 			response: []byte{0x00, 0x90, 0x00},
@@ -446,11 +446,11 @@ func TestCBORRejectsMalformedResponses(t *testing.T) {
 }
 
 func TestCBORRejectsUnexpectedIntermediateData(t *testing.T) {
-	command := append([]byte{0x01}, bytes.Repeat([]byte{0xaa}, shortCommandFragmentSize)...)
+	command := append([]byte{0x01}, bytes.Repeat([]byte{0xaa}, shortCommandFragmentDataLength)...)
 	card := newSelectedCard(t, exchange{
 		request: slices.Concat(
 			[]byte{0x90, 0x10, 0x00, 0x00, 0xf0},
-			command[:shortCommandFragmentSize],
+			command[:shortCommandFragmentDataLength],
 		),
 		response: []byte{0x01, 0x90, 0x00},
 	})
