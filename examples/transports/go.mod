@@ -10,7 +10,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/ebitengine/purego v0.11.3 // indirect
 	github.com/fxamacker/cbor/v2 v2.10.0 // indirect
-	github.com/telesma-app/hid v0.14.1 // indirect
+	github.com/telesma-app/hid v0.14.2 // indirect
 	github.com/telesma-app/iso7816 v0.7.0 // indirect
 	github.com/telesma-app/pcsc v0.10.1 // indirect
 	github.com/telesma-app/windows-proxy v0.7.1 // indirect
