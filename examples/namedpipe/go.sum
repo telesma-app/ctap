@@ -12,8 +12,8 @@ github.com/fxamacker/cbor/v2 v2.10.0 h1:HVF3T5vYwLqO81ebPirWEPNv2SMrUMD3HLnKgEr6
 github.com/fxamacker/cbor/v2 v2.10.0/go.mod h1:uSwlToFuT9BZAKRxxVm3qQC8DR4tlWl7D6pf20iRYH4=
 github.com/telesma-app/hid v0.14.1 h1:e7XFMHMj674j8o8vQ4hRJIw3RIyGYF8MUGU65LRj2M8=
 github.com/telesma-app/hid v0.14.1/go.mod h1:fvqpOxlVZAraPHWL3cgSNnY1Ib7UJbvv0KojIvGMQOI=
-github.com/telesma-app/windows-proxy v0.7.0 h1:O990mbUiQHYPSsO5qYcA7q6tiLo2dWIsDxP2gJ+ba1g=
-github.com/telesma-app/windows-proxy v0.7.0/go.mod h1:AWH4wSp2v0QC0qxM0tjYP3XzSjMDyBZyNcrzASt91wM=
+github.com/telesma-app/windows-proxy v0.7.1 h1:wYFCkaHtwEWjXZ9N33pq9u/n5rsD3DXeQGRWmVIIvjY=
+github.com/telesma-app/windows-proxy v0.7.1/go.mod h1:lCy6YdyPPZBSUB8cAkk/z903UeFIF7qw/xkgNUgU6xE=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
 golang.org/x/crypto v0.58.0 h1:COkYLr4k7nDI4r6QtMML2AfzeIswWHAJthLS6K/M/54=
