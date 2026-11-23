@@ -15,7 +15,7 @@ require (
 	github.com/telesma-app/iso7816 v0.7.0
 	github.com/telesma-app/pcsc v0.10.1
 	github.com/telesma-app/windows-proxy v0.7.1
-	golang.org/x/text v0.43.0
+	golang.org/x/text v0.44.0
 )
 
 require (
@@ -24,7 +24,7 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
 )
